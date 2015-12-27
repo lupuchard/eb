@@ -175,6 +175,7 @@ std::unique_ptr<While> Constructor::do_while(const Token& kw) {
 	std::unique_ptr<While> while_statement(new While(kw));
 	while_statement->condition.reset(new Expr());
 	if (peek().str == "{") {
+		// of no condition, defaults to infinite loop
 		while_statement->condition->push_back(Tok(kw, true));
 	} else {
 		do_expr(*while_statement->condition, "{");
@@ -187,6 +188,7 @@ std::unique_ptr<Break> Constructor::do_break(const Token& kw) {
 	std::unique_ptr<Break> break_statement(new Break(kw));
 	const Token& token = next();
 	if (token.str != ";") {
+		// you can do 'return *X' to break out of X loops
 		if (token.str != "*") throw Exception("Expected ';' or '*'", token);
 		const Token& amount = next();
 		if (amount.form != Token::INT) throw Exception("Expected integer", amount);
@@ -200,18 +202,24 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 	std::vector<Op> ops;
 	std::vector<const Token*> tokens;
 	bool prev_was_op = true;
+	bool param_ready = false;
+	int num_parameters = 0;
 	while (true) {
 		const Token& token = peek();
 		if (token == Token(Token::SYMBOL, terminator)) {
 			// the expression has terminated
 			while (!ops.empty()) {
-				if (ops.back() == Op::TEMP_PAREN) throw Exception("Unclosed parenthesis.", token);
+				if (ops.back() == Op::TEMP_PAREN) throw Exception("Unclosed parenthesis", token);
 				expr.push_back(Tok(*tokens.back(), ops.back(), return_type(ops.back())));
 				tokens.pop_back();
 				ops.pop_back();
 			}
 			next();
 			return;
+		}
+		if (param_ready && peek().str != ")") {
+			num_parameters++;
+			param_ready = false;
 		}
 		bool pwo = prev_was_op;
 		prev_was_op = false;
@@ -225,14 +233,22 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 				if (peek().str == "(") {
 					ops.push_back(Op::TEMP_FUNC);
 					tokens.push_back(&token);
+					num_parameters = 0;
+					param_ready = true;
+					next();
+					ops.push_back(Op::TEMP_PAREN);
+					tokens.push_back(nullptr);
+					prev_was_op = true;
 				} else {
 					expr.push_back(Tok(token, Tok::VAR));
 				}
 				break;
 			case Token::SYMBOL: {
 				if (token.str[0] == ',') {
+					param_ready = true;
+					prev_was_op = true;
 					while (true) {
-						if (ops.empty()) throw Exception("Mismatched parenthesis.", token);
+						if (ops.empty()) throw Exception("Mismatched parenthesis", token);
 						Op op = ops.back();
 						if (op == Op::TEMP_PAREN) {
 							break;
@@ -250,14 +266,17 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 					break;
 				} else if (token.str[0] == ')') {
 					while (true) {
-						if (ops.empty()) throw Exception("Mismatched parenthesis.", token);
+						if (ops.empty()) throw Exception("Mismatched parenthesis", token);
 						Op op = ops.back();
 						ops.pop_back();
 						if (op == Op::TEMP_PAREN) {
 							tokens.pop_back();
 							if (!ops.empty() && ops.back() == Op::TEMP_FUNC) {
+								param_ready = false;
 								ops.pop_back();
-								expr.push_back(Tok(*tokens.back(), Tok::FUNCTION));
+								Tok tok(*tokens.back(), Tok::FUNCTION);
+								tok.i = (uint64_t)num_parameters;
+								expr.push_back(tok);
 								tokens.pop_back();
 							}
 							break;
@@ -276,7 +295,7 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 					{"!", Op::NOT}, {">", Op::GT}, {"<", Op::LT}, {">=", Op::GEQ}, {"<=", Op::LEQ}
 				};
 				auto iter = operators.find(token.str);
-				if (iter == operators.end()) throw Exception("Unexpected symbol.", token);
+				if (iter == operators.end()) throw Exception("Unexpected symbol", token);
 				Op op = iter->second;
 				if (op == Op::SUB && pwo) op = Op::NEG;
 				if (op == Op::DIV && pwo) op = Op::INV;
@@ -295,13 +314,13 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 				ops.push_back(op);
 				tokens.push_back(&token);
 			} break;
-			default: throw Exception("Unexpected token.", token);
+			default: throw Exception("Unexpected token", token);
 		}
 	}
 }
 
 const Token& Constructor::next() {
-	if (index >= tokens->size()) throw Exception("Unterminated statement.", (*tokens)[index - 1]);
+	if (index >= tokens->size()) throw Exception("Unterminated block", (*tokens)[index - 1]);
 	return (*tokens)[index++];
 }
 const Token& Constructor::peek() {

@@ -92,6 +92,28 @@ TEST_CASE("expression", "[constructor]") {
 	REQUIRE(expr2[4].op == Op::AND);
 }
 
+TEST_CASE("function call", "[constructor]") {
+	std::cout << "Construct function calls..." << std::endl;
+	Tokenizer tokenizer("fn dob() { x = foo(1, 2 + 3,); x = bar(); x = baz(a, b, c); }");
+	auto& tokens = tokenizer.get_tokens();
+	Constructor constructor;
+	Module mod = constructor.construct(tokens);
+	Block& block = ((Function&)*mod[0]).block;
+
+	Expr& expr1 = *dynamic_cast<Assignment&>(*block[0]).value;
+	REQUIRE(expr1[4].form == Tok::FUNCTION);
+	REQUIRE(expr1[4].token.str == "foo");
+	REQUIRE(expr1[4].i == 2);
+
+	Expr& expr2 = *dynamic_cast<Assignment&>(*block[1]).value;
+	REQUIRE(expr2[0].form == Tok::FUNCTION);
+	REQUIRE(expr2[0].i == 0);
+
+	Expr& expr3 = *dynamic_cast<Assignment&>(*block[2]).value;
+	REQUIRE(expr3[3].form == Tok::FUNCTION);
+	REQUIRE(expr3[3].i == 3);
+}
+
 TEST_CASE("if", "[constructor]") {
 	std::cout << "Construct if..." << std::endl;
 	Tokenizer tokenizer("fn t(){if x < y { x += 1; } else if x > y { y += 1; } else { z = 0; }}");
