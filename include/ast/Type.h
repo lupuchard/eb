@@ -1,23 +1,44 @@
 #ifndef EBC_TYPES_H
 #define EBC_TYPES_H
 
+#include "Util.h"
 #include <string>
+#include <set>
 
-enum class Type {
-	INVALID, UNKNOWN, VOID,
-	NUM,
-	SIGNED, I8, I16, I32, I64,
-	UNSIGNED, U8, U16, U32, U64,
-	FLOAT, F32, F64,
-	BOOL,
+enum class Prim {
+	UNKNOWN, VOID, BOOL,
+	I8, I16, I32, I64, U8, U16, U32, U64, F32, F64,
 };
 
-Type get_supertype(Type type);
-bool is_type(Type type, Type could_be);
-Type merge_types(Type type1, Type type2);
-Type complete_type(Type type);
+class Type {
+public:
+	Type();
+	Type(Prim prim);
+	Type(const std::set<Prim>& prims);
+	static Type invalid();
 
-Type parse_type(const std::string& type);
-std::string type_to_string(Type type);
+	void add(Prim prim);
+	void add(const std::set<Prim>& prims);
+	void complete();
+
+	Type merge(const Type& other) const;
+	Type both(const Type& other) const;
+
+	bool is_known() const;
+	bool is_valid() const;
+	bool has(Prim prim) const;
+	Prim get() const;
+
+	static Type parse(const std::string& name);
+	std::string to_string() const;
+
+private:
+	std::set<Prim> possible;
+};
+
+const Type SIGNED   = Type(std::set<Prim> {Prim::I8, Prim::I16, Prim::I32, Prim::I64});
+const Type UNSIGNED = Type(std::set<Prim> {Prim::U8, Prim::U16, Prim::U32, Prim::U64});
+const Type FLOAT    = Type(std::set<Prim> {Prim::F32, Prim::F64});
+const Type NUMBER   = FLOAT.both(SIGNED.both(UNSIGNED));
 
 #endif //EBC_TYPES_H

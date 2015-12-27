@@ -189,16 +189,13 @@ void Tokenizer::parse_float(Token& token) {
 
 	// parse type
 	size_t end_pos = token.str.find('f');
-	token.type = Type::FLOAT;
 	if (end_pos != std::string::npos) {
 		std::string end = token.str.substr(end_pos);
-		if      (end == "f32") token.type = Type::F32;
-		else if (end == "f64") token.type = Type::F64;
-		else if (end != "f") {
-			token.form = Token::INVALID; // TODO: error
-			return;
-		}
+		if      (end == "f32") token.type.add(Prim::F32);
+		else if (end == "f64") token.type.add(Prim::F64);
+		else if (end != "f") throw Exception("Invalid fp suffix", token);
 	}
+	if (!token.type.is_valid()) token.type = FLOAT;
 
 	// parse value
 	std::string body = token.str.substr(0, end_pos);
@@ -241,27 +238,26 @@ void Tokenizer::parse_int(Token& token) {
 	}
 
 	// parse type
-	token.type = Type::NUM;
 	size_t end_pos = token.str.find('i');
 	if (end_pos != std::string::npos) {
-		token.type = Type::SIGNED;
 		std::string end = token.str.substr(end_pos);
-		if      (end == "i8")  token.type = Type::I8;
-		else if (end == "i16") token.type = Type::I16;
-		else if (end == "i32") token.type = Type::I32;
-		else if (end == "i64") token.type = Type::I64;
-		else if (end != "i") throw Exception("Invalid suffix.", token);
+		if      (end == "i8")  token.type.add(Prim::I8);
+		else if (end == "i16") token.type.add(Prim::I16);
+		else if (end == "i32") token.type.add(Prim::I32);
+		else if (end == "i64") token.type.add(Prim::I64);
+		else if (end != "i") throw Exception("Invalid integral suffix", token);
+		else token.type = SIGNED;
 	} else {
 		end_pos = token.str.find('u');
 		if (end_pos != std::string::npos) {
-			token.type = Type::UNSIGNED;
 			std::string end = token.str.substr(end_pos);
-			if      (end == "u8")  token.type = Type::U8;
-			else if (end == "u16") token.type = Type::U16;
-			else if (end == "u32") token.type = Type::U32;
-			else if (end == "u64") token.type = Type::U64;
-			else if (end != "u") throw Exception("Invalid suffix.", token);
-		}
+			if      (end == "u8")  token.type.add(Prim::U8);
+			else if (end == "u16") token.type.add(Prim::U16);
+			else if (end == "u32") token.type.add(Prim::U32);
+			else if (end == "u64") token.type.add(Prim::U64);
+			else if (end != "u") throw Exception("Invalid integral suffix", token);
+			else token.type = UNSIGNED;
+		} else token.type = NUMBER;
 	}
 
 	// parse value

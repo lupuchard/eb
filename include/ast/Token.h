@@ -25,7 +25,7 @@ struct Token {
 		uint64_t i;
 		double f;
 	};
-	Type type = Type::INVALID;
+	Type type = Type::invalid();
 
 	int line, column;
 };

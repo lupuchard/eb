@@ -10,7 +10,7 @@ include_directories("include" "src/teee")
 add_executable(Ebc "main.cpp" ${SOURCE_FILES}
         include/Constructor.h include/ast/Expr.h include/State.h include/ast/Statement.h
         include/ast/Token.h include/Tokenizer.h include/ast/Type.h include/Checker.h
-        include/Builder.h include/Compiler.h include/ast/Item.h)
+        include/Builder.h include/Compiler.h include/ast/Item.h include/Util.h)
 
 target_link_libraries(Ebc LLVM-3.4)
 

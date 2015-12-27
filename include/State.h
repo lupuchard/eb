@@ -18,7 +18,7 @@ struct Loop {
 struct Variable {
 	Variable() { }
 	Variable(Type type): type(type) { }
-	Type type = Type::INVALID;
+	Type type = Type::invalid();
 	llvm::Value* llvm = nullptr;
 	bool is_param = false;
 };

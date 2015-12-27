@@ -40,7 +40,7 @@ std::unique_ptr<Function> Constructor::do_function() {
 		function->param_names.push_back(param_token);
 		expect(":");
 		const Token& type_token = expect_ident();
-		function->param_types.push_back(parse_type(type_token.str));
+		function->param_types.push_back(Type::parse(type_token.str));
 		param_token = &next();
 		if (param_token->str == ",") param_token = &next();
 		else if (param_token->str != ")") throw Exception("Expected ',' or ')'", *param_token);
@@ -50,7 +50,7 @@ std::unique_ptr<Function> Constructor::do_function() {
 	const Token* colon_token = &next();
 	if (colon_token->str == ":") {
 		const Token& ret_token = expect_ident();
-		function->return_type = parse_type(ret_token.str);
+		function->return_type = Type::parse(ret_token.str);
 		colon_token = &next();
 	}
 
@@ -93,15 +93,10 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 				}
 			}
 		}
-		case Token::KW_RETURN: {
-			std::unique_ptr<Return> return_statement(new Return(token));
-			return_statement->value.reset(new Expr());
-			do_expr(*return_statement->value);
-			return std::move(return_statement);
-		}
-		case Token::KW_IF:    return do_if(token);
-		case Token::KW_WHILE: return do_while(token);
-		case Token::KW_BREAK: return do_break(token);
+		case Token::KW_RETURN: return do_return(token);
+		case Token::KW_IF:     return do_if(token);
+		case Token::KW_WHILE:  return do_while(token);
+		case Token::KW_BREAK:  return do_break(token);
 		case Token::KW_CONTINUE:
 			expect(";");
 			return std::unique_ptr<Statement>(new Statement(token, Statement::CONTINUE));
@@ -137,7 +132,7 @@ std::unique_ptr<Assignment> Constructor::do_assign(
 	if (op != Op::NOT) {
 		// If it is an operator assignment (like +=) then the expression has the variable
 		// appended to the front and the operator appended to the back.
-		expr->push_back(Tok(ident, Tok::VAR, Type::UNKNOWN));
+		expr->push_back(Tok(ident, Tok::VAR, Type(Prim::UNKNOWN)));
 		do_expr(*expr);
 		expr->push_back(Tok(*op_token, op));
 	} else {
@@ -146,6 +141,13 @@ std::unique_ptr<Assignment> Constructor::do_assign(
 	std::unique_ptr<Assignment> assignment(new Assignment(ident));
 	assignment->value.reset(expr);
 	return assignment;
+}
+
+std::unique_ptr<Return> Constructor::do_return(const Token& kw) {
+	std::unique_ptr<Return> return_statement(new Return(kw));
+	return_statement->value.reset(new Expr());
+	do_expr(*return_statement->value);
+	return return_statement;
 }
 
 std::unique_ptr<If> Constructor::do_if(const Token& kw) {
@@ -166,7 +168,7 @@ std::unique_ptr<If> Constructor::do_if(const Token& kw) {
 			throw Exception("Expected 'if' or '{'", if_tok);
 		}
 	}
-	return std::move(if_statement);
+	return if_statement;
 }
 
 std::unique_ptr<While> Constructor::do_while(const Token& kw) {
@@ -325,15 +327,15 @@ Type Constructor::return_type(Op op) {
 		case Op::NEG: case Op::ADD: case Op::MUL: case Op::MOD:
 		case Op::INV: case Op::SUB: case Op::DIV:
 		case Op::BAND: case Op::BOR: case Op::XOR: case Op::LSH: case Op::RSH:
-			return Type::NUM;
+			return NUMBER;
 
 		case Op::NOT: case Op::AND: case Op::OR: case Op::EQ: case Op::NEQ:
 		case Op::GT: case Op::LT: case Op::GEQ: case Op::LEQ:
-			return Type::BOOL;
+			return Type(Prim::BOOL);
 
-		case Op::TEMP_PAREN:
+		case Op::TEMP_PAREN: case Op::TEMP_FUNC:
 			assert(false);
-			return Type::INVALID;
+			return Type();
 	}
 }
 bool Constructor::left_assoc(Op op) {
@@ -355,7 +357,7 @@ int Constructor::precedence(Op op) {
 		case Op::BOR:                                         return  2;
 		case Op::AND:                                         return  1;
 		case Op::OR:                                          return  0;
-		case Op::TEMP_PAREN:                                  return -1;
+		case Op::TEMP_PAREN: case Op::TEMP_FUNC:              return -1;
 	}
 }
 

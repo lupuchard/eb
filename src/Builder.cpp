@@ -5,7 +5,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include <fstream>
-#include <bits/stl_set.h>
 #include <iostream>
 
 std::string Builder::build(Module& module, State& state) {
@@ -32,18 +31,19 @@ void Builder::build(Module& module, State& state, llvm::raw_ostream& stream) {
 }
 
 llvm::Type* Builder::type_to_llvm(Type type) {
-	switch (type) {
-		case Type::BOOL: return llvm::Type::getInt1Ty(*c);
-		case Type::I8:   return llvm::Type::getInt8Ty(*c);
-		case Type::I16:  return llvm::Type::getInt16Ty(*c);
-		case Type::I32:  return llvm::Type::getInt32Ty(*c);
-		case Type::I64:  return llvm::Type::getInt64Ty(*c);
-		case Type::U8:   return llvm::Type::getInt8Ty(*c);
-		case Type::U16:  return llvm::Type::getInt16Ty(*c);
-		case Type::U32:  return llvm::Type::getInt32Ty(*c);
-		case Type::U64:  return llvm::Type::getInt64Ty(*c);
-		case Type::F32:  return llvm::Type::getFloatTy(*c);
-		case Type::F64:  return llvm::Type::getDoubleTy(*c);
+	switch (type.get()) {
+		case Prim::VOID: return llvm::Type::getVoidTy(*c);
+		case Prim::BOOL: return llvm::Type::getInt1Ty(*c);
+		case Prim::I8:   return llvm::Type::getInt8Ty(*c);
+		case Prim::I16:  return llvm::Type::getInt16Ty(*c);
+		case Prim::I32:  return llvm::Type::getInt32Ty(*c);
+		case Prim::I64:  return llvm::Type::getInt64Ty(*c);
+		case Prim::U8:   return llvm::Type::getInt8Ty(*c);
+		case Prim::U16:  return llvm::Type::getInt16Ty(*c);
+		case Prim::U32:  return llvm::Type::getInt32Ty(*c);
+		case Prim::U64:  return llvm::Type::getInt64Ty(*c);
+		case Prim::F32:  return llvm::Type::getFloatTy(*c);
+		case Prim::F64:  return llvm::Type::getDoubleTy(*c);
 		default: assert(false);
 	}
 }
@@ -196,7 +196,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 	for (Tok& tok : expr) {
 		switch (tok.form) {
 			case Tok::INT_LIT:
-				if (is_type(tok.type, Type::FLOAT)) {
+				if (FLOAT.has(tok.type.get())) {
 					value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), tok.i));
 				} else {
 					value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), tok.i));
@@ -244,7 +244,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 }
 
 llvm::Constant* Builder::default_value(Type type, llvm::Type* llvm_type) {
-	if (is_type(type, Type::FLOAT)) {
+	if (FLOAT.has(type.get())) {
 		return llvm::ConstantFP::get(llvm_type, 0);
 	} else {
 		return llvm::ConstantInt::get(llvm_type, 0);
@@ -266,42 +266,42 @@ void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type result_type,
 		auto a = value_stack.back(); value_stack.pop_back();
 		Type type = type_stack.back(); type_stack.pop_back();
 		switch (op) {
-			case Op::ADD: res = is_type(type, Type::FLOAT)  ? builder.CreateFAdd(a, b) :
-		                        is_type(type, Type::SIGNED) ? builder.CreateNSWAdd(a, b) :
-		                                                      builder.CreateNUWAdd(a, b); break;
-			case Op::SUB: res = is_type(type, Type::FLOAT)  ? builder.CreateFSub(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateNSWSub(a, b) :
-			                                                  builder.CreateNUWSub(a, b); break;
-			case Op::MUL: res = is_type(type, Type::FLOAT)  ? builder.CreateFMul(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateNSWMul(a, b) :
-			                                                  builder.CreateNUWMul(a, b); break;
-			case Op::DIV: res = is_type(type, Type::FLOAT)  ? builder.CreateFDiv(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateSDiv(a, b) :
-			                                                  builder.CreateUDiv(a, b); break;
-			case Op::MOD: res = is_type(type, Type::FLOAT)  ? builder.CreateFRem(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateSRem(a, b) :
-			                                                  builder.CreateURem(a, b); break;
+			case Op::ADD: res = FLOAT.has(type.get())  ? builder.CreateFAdd(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateNSWAdd(a, b) :
+		                                                 builder.CreateNUWAdd(a, b); break;
+			case Op::SUB: res = FLOAT.has(type.get())  ? builder.CreateFSub(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateNSWSub(a, b) :
+			                                             builder.CreateNUWSub(a, b); break;
+			case Op::MUL: res = FLOAT.has(type.get())  ? builder.CreateFMul(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateNSWMul(a, b) :
+			                                             builder.CreateNUWMul(a, b); break;
+			case Op::DIV: res = FLOAT.has(type.get())  ? builder.CreateFDiv(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateSDiv(a, b) :
+			                                             builder.CreateUDiv(a, b); break;
+			case Op::MOD: res = FLOAT.has(type.get())  ? builder.CreateFRem(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateSRem(a, b) :
+			                                             builder.CreateURem(a, b); break;
 			case Op::BAND: case Op::AND: res = builder.CreateAnd( a, b); break;
 			case Op::BOR:  case Op::OR:  res = builder.CreateOr(  a, b); break;
 			case Op::XOR:                res = builder.CreateXor( a, b); break;
 			case Op::LSH:                res = builder.CreateShl( a, b); break;
 			case Op::RSH:                res = builder.CreateAShr(a, b); break;
-			case Op::EQ:  res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpUEQ(a, b) :
-		                                                      builder.CreateICmpEQ(a, b); break;
-			case Op::NEQ: res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpUNE(a, b) :
-		                                                      builder.CreateICmpNE(a, b); break;
-			case Op::GT:  res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpUGT(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateICmpSGT(a, b) :
-			                                                  builder.CreateICmpUGT(a, b); break;
-			case Op::LT:  res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpULT(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateICmpSLT(a, b) :
-			                                                  builder.CreateICmpULT(a, b); break;
-			case Op::GEQ: res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpUGE(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateICmpSGE(a, b) :
-			                                                  builder.CreateICmpUGE(a, b); break;
-			case Op::LEQ: res = is_type(type, Type::FLOAT)  ? builder.CreateFCmpULE(a, b) :
-			                    is_type(type, Type::SIGNED) ? builder.CreateICmpSLE(a, b) :
-			                                                  builder.CreateICmpULE(a, b); break;
+			case Op::EQ:  res = FLOAT.has(type.get())  ? builder.CreateFCmpUEQ(a, b) :
+		                                                 builder.CreateICmpEQ(a, b); break;
+			case Op::NEQ: res = FLOAT.has(type.get())  ? builder.CreateFCmpUNE(a, b) :
+		                                                 builder.CreateICmpNE(a, b); break;
+			case Op::GT:  res = FLOAT.has(type.get())  ? builder.CreateFCmpUGT(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateICmpSGT(a, b) :
+			                                             builder.CreateICmpUGT(a, b); break;
+			case Op::LT:  res = FLOAT.has(type.get())  ? builder.CreateFCmpULT(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateICmpSLT(a, b) :
+			                                             builder.CreateICmpULT(a, b); break;
+			case Op::GEQ: res = FLOAT.has(type.get())  ? builder.CreateFCmpUGE(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateICmpSGE(a, b) :
+			                                             builder.CreateICmpUGE(a, b); break;
+			case Op::LEQ: res = FLOAT.has(type.get())  ? builder.CreateFCmpULE(a, b) :
+			                    SIGNED.has(type.get()) ? builder.CreateICmpSLE(a, b) :
+			                                             builder.CreateICmpULE(a, b); break;
 			default: assert(false);
 		}
 	} else {
@@ -309,12 +309,12 @@ void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type result_type,
 		Type type = type_stack.back(); type_stack.pop_back();
 		switch (op) {
 			case Op::NOT: res = builder.CreateNot(a); break;
-			case Op::NEG: res = is_type(type, Type::FLOAT)  ? builder.CreateFNeg(a) :
-		                        is_type(type, Type::SIGNED) ? builder.CreateNSWNeg(a) :
-		                                                      builder.CreateNUWNeg(a); break;
-			case Op::INV: res = is_type(type, Type::FLOAT)  ? builder.CreateFDiv(llvm::ConstantFP::get(a->getType(), 0), a) :
-		                        is_type(type, Type::SIGNED) ? builder.CreateSDiv(llvm::ConstantInt::get(a->getType(), 0), a) :
-		                                                      builder.CreateUDiv(llvm::ConstantInt::get(a->getType(), 0), a); break;
+			case Op::NEG: res = FLOAT.has(type.get())  ? builder.CreateFNeg(a) :
+			                    SIGNED.has(type.get()) ? builder.CreateNSWNeg(a) :
+		                                                 builder.CreateNUWNeg(a); break;
+			case Op::INV: res = FLOAT.has(type.get())  ? builder.CreateFDiv(llvm::ConstantFP::get(a->getType(), 0), a) :
+			                    SIGNED.has(type.get()) ? builder.CreateSDiv(llvm::ConstantInt::get(a->getType(), 0), a) :
+		                                                 builder.CreateUDiv(llvm::ConstantInt::get(a->getType(), 0), a); break;
 			default: assert(false); break;
 		}
 	}

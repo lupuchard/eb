@@ -24,6 +24,7 @@ private:
 	std::unique_ptr<Statement>   do_statement();
 	std::unique_ptr<Declaration> do_declare(const Token& ident);
 	std::unique_ptr<Assignment>  do_assign( const Token& ident, Op op, const Token* op_token);
+	std::unique_ptr<Return>      do_return( const Token& kw);
 	std::unique_ptr<If>          do_if(     const Token& kw);
 	std::unique_ptr<While>       do_while(  const Token& kw);
 	std::unique_ptr<Break>       do_break(  const Token& kw);

@@ -1,86 +1,106 @@
 #include "ast/Type.h"
 #include <unordered_map>
+#include <iostream>
 
-Type get_supertype(Type type) {
-	switch (type) {
-		case Type::NUM: case Type::BOOL:
-			return Type::UNKNOWN;
-		case Type::SIGNED: case Type::UNSIGNED: case Type::FLOAT:
-			return Type::NUM;
-		case Type::I8: case Type::I16: case Type::I32: case Type::I64:
-			return Type::SIGNED;
-		case Type::U8: case Type::U16: case Type::U32: case Type::U64:
-			return Type::UNSIGNED;
-		case Type::F32: case Type::F64:
-			return Type::FLOAT;
-		default: return Type::INVALID;
+Type::Type() {
+	possible.insert(Prim::UNKNOWN);
+}
+
+Type::Type(Prim prim) {
+	possible.insert(prim);
+}
+Type::Type(const std::set<Prim>& prims): possible(prims) {  }
+
+Type Type::invalid() {
+	return Type(std::set<Prim> {});
+}
+
+void Type::add(Prim prim) {
+	auto iter = possible.find(Prim::UNKNOWN);
+	if (iter != possible.end()) possible.erase(iter);
+	possible.insert(prim);
+}
+void Type::add(const std::set<Prim>& prims) {
+	possible.insert(prims.begin(), prims.end());
+}
+void Type::complete() {
+	if (possible.count(Prim::F64) && merge(FLOAT).possible.size() == possible.size()) {
+		possible = {Prim::F64};
+	} else if (possible.count(Prim::I32) && merge(NUMBER).possible.size() == possible.size()) {
+		possible = {Prim::I32};
 	}
 }
 
-bool is_type(Type type, Type could_be) {
-	while (type != Type::INVALID) {
-		if (type == could_be) return true;
-		type = get_supertype(type);
-	}
-	return false;
+Type Type::merge(const Type& other) const {
+	if (other.possible.count(Prim::UNKNOWN)) return *this;
+	else if  (possible.count(Prim::UNKNOWN)) return other;
+	Type res = Type::invalid();
+	std::set_intersection(possible.begin(), possible.end(),
+	                      other.possible.begin(), other.possible.end(),
+	                      std::inserter(res.possible, res.possible.begin()));
+	return res;
+}
+Type Type::both(const Type& other) const {
+	if (other.possible.count(Prim::UNKNOWN)) return other;
+	else if  (possible.count(Prim::UNKNOWN)) return *this;
+	Type res = Type::invalid();
+	std::set_union(possible.begin(), possible.end(), other.possible.begin(), other.possible.end(),
+	               std::inserter(res.possible, res.possible.begin()));
+	return res;
 }
 
-Type merge_types(Type type1, Type type2) {
-	Type t = type2;
-	while (t != Type::INVALID) {
-		if (t == type1) return type2;
-		t = get_supertype(t);
-	}
-	t = type1;
-	while (t != Type::INVALID) {
-		if (t == type2) return type1;
-		t = get_supertype(t);
-	}
-	return Type::INVALID;
-}
 
-Type complete_type(Type type) {
-	switch (type) {
-		case Type::NUM:      return Type::I32;
-		case Type::SIGNED:   return Type::I32;
-		case Type::UNSIGNED: return Type::U32;
-		case Type::FLOAT:    return Type::F64;
-		case Type::UNKNOWN:  return Type::INVALID;
-		default: return type;
-	}
-}
-
-Type parse_type(const std::string& type) {
-	static std::unordered_map<std::string, Type> types = {
-			{"Bool", Type::BOOL},
-			{"I8", Type::I8}, {"I16", Type::I16}, {"I32", Type::I32}, {"I64", Type::I64},
-			{"U8", Type::U8}, {"U16", Type::U16}, {"U32", Type::U32}, {"U64", Type::U64},
-			{"F32", Type::F32}, {"F64", Type::F64},
+Type Type::parse(const std::string& name) {
+	static std::unordered_map<std::string, Prim> types = {
+			{"Bool", Prim::BOOL}, {"Int", Prim::I32},
+			{"I8", Prim::I8}, {"I16", Prim::I16}, {"I32", Prim::I32}, {"I64", Prim::I64},
+			{"U8", Prim::U8}, {"U16", Prim::U16}, {"U32", Prim::U32}, {"U64", Prim::U64},
+			{"F32", Prim::F32}, {"F64", Prim::F64},
 	};
-	auto iter = types.find(type);
-	if (iter == types.end()) return Type::INVALID;
-	return iter->second;
+	auto iter = types.find(name);
+	if (iter != types.end()) {
+		return Type(iter->second);
+	}
+	return Type();
 }
 
-std::string type_to_string(Type type) {
-	switch (type) {
-		case Type::INVALID:  return "Invalid";
-		case Type::UNKNOWN:  return "Unknown";
-		case Type::NUM:      return "Number";
-		case Type::SIGNED:   return "Signed Int";
-		case Type::I8:       return "I8";
-		case Type::I16:      return "I16";
-		case Type::I32:      return "I32";
-		case Type::I64:      return "I64";
-		case Type::UNSIGNED: return "Unsigned Int";
-		case Type::U8:       return "U8";
-		case Type::U16:      return "U16";
-		case Type::U32:      return "U32";
-		case Type::U64:      return "U64";
-		case Type::FLOAT:    return "Floating Point";
-		case Type::F32:      return "F32";
-		case Type::F64:      return "F64";
-		case Type::BOOL:     return "Bool";
-		case Type::VOID:     return "Void";
+bool Type::is_known() const {
+	return possible.size() == 1 && *possible.begin() != Prim::UNKNOWN;
+}
+bool Type::is_valid() const {
+	return !possible.empty();
+}
+Prim Type::get() const {
+	if (possible.size() > 1) return Prim::UNKNOWN;
+	return *possible.begin();
+}
+bool Type::has(Prim prim) const {
+	return possible.count(Prim::UNKNOWN) || possible.count(prim);
+}
+
+std::string Type::to_string() const {
+	std::string str;
+	if (possible.size() > 1) str += "[";
+	bool first = true;
+	for (Prim prim : possible) {
+		if (!first) str += ", ";
+		else first = false;
+		switch (prim) {
+			case Prim::UNKNOWN: str += "Unknown"; break;
+			case Prim::I8:      str += "I8";      break;
+			case Prim::I16:     str += "I16";     break;
+			case Prim::I32:     str += "I32";     break;
+			case Prim::I64:     str += "I64";     break;
+			case Prim::U8:      str += "U8";      break;
+			case Prim::U16:     str += "U16";     break;
+			case Prim::U32:     str += "U32";     break;
+			case Prim::U64:     str += "U64";     break;
+			case Prim::F32:     str += "F32";     break;
+			case Prim::F64:     str += "F64";     break;
+			case Prim::BOOL:    str += "Bool";    break;
+			case Prim::VOID:    str += "Void";    break;
+		}
 	}
+	if (possible.size() > 1) str += "]";
+	return str;
 }

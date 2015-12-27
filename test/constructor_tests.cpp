@@ -12,8 +12,8 @@ TEST_CASE("function", "[constructor]") {
 	Function& function = dynamic_cast<Function&>(*mod[0]);
 	REQUIRE(function.param_types.size() == 2);
 	REQUIRE(function.param_names[0]->str == "a");
-	REQUIRE(function.param_types[1] == Type::F64);
-	REQUIRE(function.return_type == Type::BOOL);
+	REQUIRE(function.param_types[1].get() == Prim::F64);
+	REQUIRE(function.return_type.get() == Prim::BOOL);
 }
 
 TEST_CASE("assignment", "[constructor]") {

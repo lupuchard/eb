@@ -28,12 +28,12 @@ void Checker::check_types(Block& block, State& state) {
 		switch (statement.form) {
 			case Statement::DECLARATION: {
 				Declaration& decl = (Declaration&)statement;
-				Type type = Type::UNKNOWN;
+				Type type;
 				if (decl.type_token != nullptr) {
-					type = parse_type(decl.type_token->str);
+					type = Type::parse(decl.type_token->str);
 				}
 				if (decl.value.get() != nullptr) {
-					type = merge_types(type, type_of(*decl.value, state, decl.token));
+					type = type.merge(type_of(*decl.value, state, decl.token));
 				}
 				state.declare(decl.token.str, type);
 			} break;
@@ -46,29 +46,29 @@ void Checker::check_types(Block& block, State& state) {
 				} else if (var->is_param) {
 					throw Exception("You may not assign to parameters", assign.token);
 				}
-				Type t = merge_types(var->type, type);
-				if (t == Type::INVALID) {
-					throw Exception("Cannot assign " + type_to_string(type) + " to variable of " +
-					                "type " + type_to_string(var->type), assign.token);
+				Type t = var->type.merge(type);
+				if (!t.is_valid()) {
+					throw Exception("Cannot assign " + type.to_string() + " to variable of " +
+					                "type " + var->type.to_string(), assign.token);
 				}
 				var->type = t;
 			} break;
 			case Statement::RETURN: {
 				Return& ret = (Return&)statement;
-				if (state.get_return() == Type::VOID) break;
+				if (state.get_return().get() == Prim::VOID) break;
 				Type type = type_of(*ret.value, state, ret.token);
-				Type t = merge_types(state.get_return(), type);
-				if (t == Type::INVALID) {
-					throw Exception("Cannot return " + type_to_string(type) + "from function " +
-					                "returning " + type_to_string(state.get_return()), ret.token);
+				Type t = state.get_return().merge(type);
+				if (!t.is_valid()) {
+					throw Exception("Cannot return " + type.to_string() + "from function " +
+					                "returning " + state.get_return().to_string(), ret.token);
 				}
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
 				for (size_t j = 0; j < if_statement.conditions.size(); j++) {
 					Type type = type_of(*if_statement.conditions[j], state, if_statement.token);
-					if (merge_types(Type::BOOL, type) == Type::INVALID) {
-						throw Exception("Condition should be Bool, was " + type_to_string(type),
+					if (!type.has(Prim::BOOL)) {
+						throw Exception("Condition should be Bool, was " + type.to_string(),
 						                if_statement.token);
 					}
 				}
@@ -81,8 +81,8 @@ void Checker::check_types(Block& block, State& state) {
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
 				Type type = type_of(*while_statement.condition, state, while_statement.token);
-				if (merge_types(Type::BOOL, type) == Type::INVALID) {
-					throw Exception("Condition should be Bool, was " + type_to_string(type),
+				if (!type.has(Prim::BOOL)) {
+					throw Exception("Condition should be Bool, was " + type.to_string(),
 					                while_statement.token);
 				}
 				state.descend(while_statement.block);
@@ -115,9 +115,10 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 			for (int i = (int)func->param_types.size() - 1; i >= 0; i--) {
 				Type arg = stack.back();
 				stack.pop_back();
-				if (merge_types(arg, func->param_types[i]) == Type::INVALID) {
-					throw Exception("Can't pass " + type_to_string(arg) + " as argument of type " +
-					                type_to_string(func->param_types[i]), tok.token);
+				Type merged = arg.merge(func->param_types[i]);
+				if (!merged.is_valid()) {
+					throw Exception("Can't pass " + arg.to_string() + " as argument of type " +
+					                func->param_types[i].to_string(), tok.token);
 				}
 			}
 			stack.push_back(func->return_type);
@@ -128,20 +129,20 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 					tok.type = merge_stack(stack, 2, tok.type, tok.token);
 					break;
 				case Op::AND: case Op::OR:
-					merge_stack(stack, 2, Type::BOOL, tok.token);
+					merge_stack(stack, 2, Type(Prim::BOOL), tok.token);
 					break;
 				case Op::GT: case Op::LT: case Op::GEQ: case Op::LEQ:
-					merge_stack(stack, 2, Type::NUM, tok.token);
+					merge_stack(stack, 2, NUMBER, tok.token);
 					break;
 				case Op::EQ: case Op::NEQ:
-					merge_stack(stack, 2, Type::UNKNOWN, tok.token);
+					merge_stack(stack, 2, Type(), tok.token);
 					break;
 				case Op::NOT:
-					merge_stack(stack, 1, Type::BOOL, tok.token);
+					merge_stack(stack, 1, Type(Prim::BOOL), tok.token);
 					break;
 				case Op::NEG:
 					tok.type = merge_stack(stack, 1, tok.type, tok.token);
-					if (is_type(tok.type, Type::UNSIGNED)) {
+					if (!tok.type.merge(UNSIGNED).is_valid()) {
 						throw Exception("Expected unsigned type", tok.token);
 					}
 					break;
@@ -160,20 +161,19 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 }
 
 inline void test_type(Type a, Type b, Type t, const Token& token) {
-	if (t == Type::INVALID) throw Checker::Exception("Types do not match: " +
-	                                                 type_to_string(a) + " and " +
-	                                                 type_to_string(b), token);
+	if (!t.is_valid()) throw Checker::Exception("Types do not match: " + a.to_string() + " and " +
+	                                            b.to_string(), token);
 }
 Type Checker::merge_stack(std::vector<Type> &stack, int num, Type req_type, const Token &token) {
 	if (stack.size() < num) throw Exception("Misused operator.", token);
-	Type type = Type::UNKNOWN;
+	Type type;
 	for (int i = 0; i < num; i++) {
-		Type n = merge_types(type, stack.back());
+		Type n =  type.merge(stack.back());
 		test_type(type, stack.back(), n, token);
 		stack.pop_back();
 		type = n;
 	}
-	Type n = merge_types(type, req_type);
+	Type n = type.merge(req_type);
 	test_type(type, req_type, n, token);
 	return n;
 }
@@ -206,8 +206,8 @@ void Checker::complete_var_types(Block& block, State& state) {
 			case Statement::DECLARATION: {
 				Declaration& declaration = (Declaration&)statement;
 				Variable& var = state.next_var(declaration.token.str);
-				var.type = complete_type(var.type);
-				if (var.type == Type::INVALID) {
+				var.type.complete();
+				if (!var.type.is_known()) {
 					throw Exception("Type could not be determined.", declaration.token);
 				}
 			} break;
@@ -246,12 +246,12 @@ void Checker::complete_lit_types(Block &block, State& state) {
 			case Statement::RETURN: {
 				Return& return_statement = (Return&)statement;
 				Type type = state.get_return();
-				if (type != Type::VOID) complete_expr(state, *return_statement.value, type);
+				if (type.get() != Prim::VOID) complete_expr(state, *return_statement.value, type);
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
 				for (size_t j = 0; j < if_statement.conditions.size(); j++) {
-					complete_expr(state, *if_statement.conditions[j], Type::BOOL);
+					complete_expr(state, *if_statement.conditions[j], Type(Prim::BOOL));
 				}
 				for (Block& if_block : if_statement.blocks) {
 					state.descend(if_block);
@@ -261,7 +261,7 @@ void Checker::complete_lit_types(Block &block, State& state) {
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				complete_expr(state, *while_statement.condition, Type::BOOL);
+				complete_expr(state, *while_statement.condition, Type(Prim::BOOL));
 				state.descend(while_statement.block);
 				complete_lit_types(while_statement.block, state);
 				state.ascend();
@@ -281,14 +281,14 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 		switch (tok.form) {
 			case Tok::VAR: {
 				Type var_type = state.get_var(tok.token.str)->type;
-				assert(var_type == complete_type(var_type) && var_type != Type::INVALID);
+				assert(var_type.is_known());
 				type_stack.push_back(var_type);
 				ref_stack.emplace_back();
 			} break;
 			case Tok::FUNCTION: {
 				Function* function = state.get_func(tok.token.str);
 				for (Type param : function->param_types) {
-					if (type_stack.back() == Type::UNKNOWN) {
+					if (!type_stack.back().is_known()) {
 						for (Type* type : ref_stack.back()) {
 							*type = param;
 						}
@@ -309,10 +309,10 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 						Type type1 = type_stack.back(); type_stack.pop_back();
 						auto  vec1 =  ref_stack.back();  ref_stack.pop_back();
 
-						if (type1 == Type::UNKNOWN) {
-							if (type2 == Type::UNKNOWN) {
+						if (!type1.is_known()) {
+							if (!type2.is_known()) {
 								vec1.insert(vec1.end(), vec2.begin(), vec2.end());
-								type_stack.push_back(Type::UNKNOWN);
+								type_stack.push_back(Type());
 								ref_stack.push_back(vec1);
 							} else {
 								for (Type* type : vec1) *type = type2;
@@ -320,7 +320,7 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 								ref_stack.emplace_back();
 							}
 						} else {
-							if (type2 == Type::UNKNOWN) {
+							if (!type2.is_known()) {
 								for (Type* type : vec2) *type = type1;
 							}
 							type_stack.push_back(type1);
@@ -334,17 +334,17 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 						Type type1 = type_stack.back(); type_stack.pop_back();
 						auto  vec1 =  ref_stack.back();  ref_stack.pop_back();
 
-						if (type1 == Type::UNKNOWN) {
-							if (type2 == Type::UNKNOWN) {
-								for (Type* type : vec1) *type = complete_type(*type);
-								for (Type* type : vec2) *type = complete_type(*type);
+						if (!type1.is_known()) {
+							if (!type2.is_known()) {
+								for (Type* type : vec1) type->complete();
+								for (Type* type : vec2) type->complete();
 							} else {
 								for (Type* type : vec1) *type = type2;
 							}
 						} else {
 							for (Type* type : vec2) *type = type1;
 						}
-						type_stack.push_back(Type::BOOL);
+						type_stack.push_back(Type(Prim::BOOL));
 						ref_stack.emplace_back();
 					} break;
 					case Op::NOT: case Op::NEG: break;
@@ -353,15 +353,15 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 			} break;
 			default:
 				ref_stack.emplace_back();
-				if (tok.type != complete_type(tok.type)) {
-					type_stack.push_back(Type::UNKNOWN);
+				if (!tok.type.is_known()) {
+					type_stack.push_back(Type());
 					ref_stack.back().push_back(&tok.type);
 				} else {
 					type_stack.push_back(tok.type);
 				}
 		}
 	}
-	if (type_stack.back() == Type::UNKNOWN) {
+	if (!type_stack.back().is_known()) {
 		for (Type* type : ref_stack.back()) *type = final_type;
 	}
 }

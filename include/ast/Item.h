@@ -14,7 +14,7 @@ struct Function: public Item {
 	Function(const Token& name_token): name_token(name_token), Item(FUNCTION) { }
 	const Token& name_token;
 	Block block;
-	Type return_type = Type::VOID;
+	Type return_type = Type(Prim::VOID);
 	std::vector<Type> param_types;
 	std::vector<const Token*> param_names;
 };
