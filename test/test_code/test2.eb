@@ -1,0 +1,71 @@
+
+fn simple(): I32 {
+	foo := 0;
+    bar := 0;
+    while foo < 5 {
+    	foo += 1;
+    	bar += 2;
+    }
+    return bar;
+}
+
+fn breaks(): I32 {
+	foo := 0;
+	while foo < 5 {
+		foo += 1;
+		if foo == 2 {
+			break;
+		}
+	}
+	return foo;
+}
+
+fn mega_breaks(): I32 {
+	foo := 0;
+	dog := 0;
+	while foo < 10 {
+		bar := 0;
+		while bar < 10 {
+			bar += 1;
+			if bar == 6 {
+				break;
+			}
+			if foo == 4 {
+				break *2;
+			}
+		}
+		foo += 1;
+		dog += bar;
+	}
+	return dog;
+}
+
+fn continues(): I32 {
+	foo := 0;
+	bar := 0;
+	while foo < 5 {
+		foo += 1;
+		if foo % 2 == 0 { continue; }
+		bar += foo;
+	}
+	return bar;
+}
+
+fn main(): I32 {
+	if simple() != 10 {
+		return 1;
+	}
+	if breaks() != 2 {
+		return 2;
+	}
+	if mega_breaks() != 24 {
+		return 3;
+	}
+	if continues() != 9 {
+		return 4;
+	}
+	return 0;
+}
+
+
+// CRASHES WHEN infinite loop?

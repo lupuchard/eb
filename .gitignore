@@ -16,13 +16,20 @@
 # Fortran module files
 *.mod
 
-# Compiled Static libraries
+# Compiled
 *.lai
 *.la
 *.a
 *.lib
+*.ll
+*.s
 
 # Executables
 *.exe
 *.out
 *.app
+Debug/*
+out
+
+# Idea
+.idea/*

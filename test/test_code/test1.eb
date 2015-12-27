@@ -1,0 +1,49 @@
+
+fn maths(a: I32, b: I32): Bool {
+	x := 2 * (3 + a % 4);
+	x += 2;
+	y := (0x20 & 0d10 | 0o30 ^ 0b101 << 2) - x;
+	x := 4;
+	y += x;
+	return y == x && b == 12;
+}
+
+fn something(): Bool {
+	return true && true && true || false;
+}
+
+fn ifs(): Bool {
+	x := 5;
+	if x != 5 {
+		return false;
+	} else {
+		x := true;
+		if !x {
+			return false;
+		} else if something() {
+			return true;
+		}
+	}
+	return false;
+}
+
+fn main(): I32 {
+	if maths(6, 12) {
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+// IMPROVEMENTS
+//   function overloading
+//   anywhere blocks
+//   semicolons optional
+//   fib
+//   functional ifs
+//     short circuiting
+// NEXT
+//   namespaces
+//   modules/imports
+//   external c
+//   structs
