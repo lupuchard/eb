@@ -103,17 +103,17 @@ void Checker::check_types(Block& block, State& state) {
 }
 
 Type Checker::type_of(Expr &expr, State& state, const Token& token) {
-	std::vector<Type> stack;
+	std::vector<Type*> stack;
 	for (Tok& tok : expr) {
 		if (tok.form == Tok::VAR) {
 			Variable* var = state.get_var(tok.token.str);
 			if (var == nullptr) throw Exception("Variable not found", tok.token);
-			stack.push_back(var->type);
+			stack.push_back(&var->type);
 		} else if (tok.form == Tok::FUNCTION) {
 			Function* func = state.get_func(tok.token.str);
 			if (func == nullptr) throw Exception("Function not found", tok.token);
 			for (int i = (int)func->param_types.size() - 1; i >= 0; i--) {
-				Type arg = stack.back();
+				Type& arg = *stack.back();
 				stack.pop_back();
 				Type merged = arg.merge(func->param_types[i]);
 				if (!merged.is_valid()) {
@@ -121,7 +121,7 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 					                func->param_types[i].to_string(), tok.token);
 				}
 			}
-			stack.push_back(func->return_type);
+			stack.push_back(&func->return_type);
 		} else if (tok.form == Tok::OP) {
 			switch (tok.op) {
 				case Op::ADD: case Op::SUB: case Op::MUL: case Op::DIV: case Op::MOD:
@@ -151,25 +151,25 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 					break;
 				case Op::TEMP_PAREN: case Op::TEMP_FUNC: assert(false);
 			}
-			stack.push_back(tok.type);
+			stack.push_back(&tok.type);
 		} else {
-			stack.push_back(tok.type);
+			stack.push_back(&tok.type);
 		}
 	}
 	if (stack.empty()) throw Exception("Empty expression.", token);
-	return stack.back();
+	return *stack.back();
 }
 
 inline void test_type(Type a, Type b, Type t, const Token& token) {
 	if (!t.is_valid()) throw Checker::Exception("Types do not match: " + a.to_string() + " and " +
 	                                            b.to_string(), token);
 }
-Type Checker::merge_stack(std::vector<Type> &stack, int num, Type req_type, const Token &token) {
+Type Checker::merge_stack(std::vector<Type*> &stack, int num, Type req_type, const Token &token) {
 	if (stack.size() < num) throw Exception("Misused operator.", token);
 	Type type;
 	for (int i = 0; i < num; i++) {
-		Type n =  type.merge(stack.back());
-		test_type(type, stack.back(), n, token);
+		Type n =  type.merge(*stack.back());
+		test_type(type, *stack.back(), n, token);
 		stack.pop_back();
 		type = n;
 	}

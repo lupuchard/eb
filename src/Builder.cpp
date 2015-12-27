@@ -30,7 +30,7 @@ void Builder::build(Module& module, State& state, llvm::raw_ostream& stream) {
 	pass_manager.run(llvm_module);
 }
 
-llvm::Type* Builder::type_to_llvm(Type type) {
+llvm::Type* Builder::type_to_llvm(const Type& type) {
 	switch (type.get()) {
 		case Prim::VOID: return llvm::Type::getVoidTy(*c);
 		case Prim::BOOL: return llvm::Type::getInt1Ty(*c);
@@ -192,7 +192,7 @@ bool Builder::do_block(llvm::IRBuilder<>& builder, Block& block, State& state) {
 
 llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& state) {
 	std::vector<llvm::Value*> value_stack;
-	std::vector<Type> type_stack;
+	std::vector<Type*> type_stack;
 	for (Tok& tok : expr) {
 		switch (tok.form) {
 			case Tok::INT_LIT:
@@ -201,15 +201,15 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				} else {
 					value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), tok.i));
 				}
-				type_stack.push_back(tok.type);
+				type_stack.push_back(&tok.type);
 				break;
 			case Tok::FLOAT_LIT:
 				value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), tok.f));
-				type_stack.push_back(tok.type);
+				type_stack.push_back(&tok.type);
 				break;
 			case Tok::BOOL_LIT:
 				value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), tok.i));
-				type_stack.push_back(tok.type);
+				type_stack.push_back(&tok.type);
 				break;
 			case Tok::VAR: {
 				Variable& var = *state.get_var(tok.token.str);
@@ -218,7 +218,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				} else {
 					value_stack.push_back(builder.CreateLoad(var.llvm, tok.token.str.c_str()));
 				}
-				type_stack.push_back(var.type);
+				type_stack.push_back(&var.type);
 			} break;
 			case Tok::FUNCTION: {
 				Function& func = *state.get_func(tok.token.str);
@@ -233,7 +233,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 						state.get_func_llvm(tok.token.str),
 						llvm::ArrayRef<llvm::Value*>(args), func.name_token.str
 				));
-				type_stack.push_back(func.return_type);
+				type_stack.push_back(&func.return_type);
 			} break;
 			case Tok::OP:
 				do_op(builder, tok.op, tok.type, value_stack, type_stack);
@@ -243,7 +243,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 	return value_stack.back();
 }
 
-llvm::Constant* Builder::default_value(Type type, llvm::Type* llvm_type) {
+llvm::Constant* Builder::default_value(const Type& type, llvm::Type* llvm_type) {
 	if (FLOAT.has(type.get())) {
 		return llvm::ConstantFP::get(llvm_type, 0);
 	} else {
@@ -257,14 +257,14 @@ bool is_binary(Op op) {
 		default: return true;
 	}
 }
-void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type result_type,
-                    std::vector<llvm::Value*>& value_stack, std::vector<Type>& type_stack) {
+void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type& result_type,
+                    std::vector<llvm::Value*>& value_stack, std::vector<Type*>& type_stack) {
 	llvm::Value* res;
 	if (is_binary(op)) {
 		auto b = value_stack.back(); value_stack.pop_back();
 		type_stack.pop_back();
 		auto a = value_stack.back(); value_stack.pop_back();
-		Type type = type_stack.back(); type_stack.pop_back();
+		Type& type = *type_stack.back(); type_stack.pop_back();
 		switch (op) {
 			case Op::ADD: res = FLOAT.has(type.get())  ? builder.CreateFAdd(a, b) :
 			                    SIGNED.has(type.get()) ? builder.CreateNSWAdd(a, b) :
@@ -306,7 +306,7 @@ void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type result_type,
 		}
 	} else {
 		auto a = value_stack.back(); value_stack.pop_back();
-		Type type = type_stack.back(); type_stack.pop_back();
+		Type& type = *type_stack.back(); type_stack.pop_back();
 		switch (op) {
 			case Op::NOT: res = builder.CreateNot(a); break;
 			case Op::NEG: res = FLOAT.has(type.get())  ? builder.CreateFNeg(a) :
@@ -319,7 +319,7 @@ void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type result_type,
 		}
 	}
 	value_stack.push_back(res);
-	type_stack.push_back(result_type);
+	type_stack.push_back(&result_type);
 }
 
 llvm::BasicBlock* Builder::create_basic_block(std::string name) {

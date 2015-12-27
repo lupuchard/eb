@@ -24,7 +24,7 @@ public:
 	void complete_types(Block& block, State& state);
 
 private:
-	Type merge_stack(std::vector<Type>& stack, int num, Type type, const Token& token);
+	Type merge_stack(std::vector<Type*>& stack, int num, Type type, const Token& token);
 
 	void complete_var_types(Block& block, State& state);
 	void complete_lit_types(Block& block, State& state);
