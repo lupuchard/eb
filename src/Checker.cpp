@@ -9,7 +9,7 @@ void Checker::check_types(Module& module, State& state) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
 				bool exists = state.declare(func.name_token.str, func);
-				if (exists) throw Exception("Duplicate function name.", func.name_token);
+				if (exists) throw Exception("Duplicate function definition", func.name_token);
 				state.descend(func.block);
 				state.set_return(func.return_type);
 				for (size_t j = 0; j < func.param_names.size(); j++) {
@@ -103,6 +103,7 @@ void Checker::check_types(Block& block, State& state) {
 }
 
 Type Checker::type_of(Expr &expr, State& state, const Token& token) {
+	static Type unknown;
 	std::vector<Type*> stack;
 	for (Tok& tok : expr) {
 		if (tok.form == Tok::VAR) {
@@ -110,18 +111,28 @@ Type Checker::type_of(Expr &expr, State& state, const Token& token) {
 			if (var == nullptr) throw Exception("Variable not found", tok.token);
 			stack.push_back(&var->type);
 		} else if (tok.form == Tok::FUNCTION) {
-			Function* func = state.get_func(tok.token.str);
-			if (func == nullptr) throw Exception("Function not found", tok.token);
-			for (int i = (int)func->param_types.size() - 1; i >= 0; i--) {
-				Type& arg = *stack.back();
-				stack.pop_back();
-				Type merged = arg.merge(func->param_types[i]);
-				if (!merged.is_valid()) {
-					throw Exception("Can't pass " + arg.to_string() + " as argument of type " +
-					                func->param_types[i].to_string(), tok.token);
+			auto& funcs = state.get_functions((int)tok.i, tok.token.str);
+			if (funcs.empty()) throw Exception("Function not found", tok.token);
+			std::vector<Type> possible(tok.i, Type::invalid());
+			std::vector<Function*> valid_funcs;
+
+			std::vector<Type*> arguments(stack.end() - tok.i, stack.end());
+			stack.erase(stack.end() - tok.i, stack.end());
+
+			for (Function* func : funcs) {
+				if (func->allows(arguments)) {
+					for (size_t i = 0; i < tok.i; i++) {
+						possible[i].add(func->param_types[i].get());
+					}
+					valid_funcs.push_back(func);
 				}
 			}
-			stack.push_back(&func->return_type);
+			if (valid_funcs.empty()) throw Exception("Arguments match no function", tok.token);
+			for (size_t i = 0; i < tok.i; i++) {
+				*arguments[i] = arguments[i]->merge(possible[i]);
+			}
+			stack.push_back(valid_funcs.size() == 1 ? &valid_funcs[0]->return_type : &unknown);
+
 		} else if (tok.form == Tok::OP) {
 			switch (tok.op) {
 				case Op::ADD: case Op::SUB: case Op::MUL: case Op::DIV: case Op::MOD:
@@ -286,17 +297,31 @@ void Checker::complete_expr(State& state, Expr& expr, Type final_type) {
 				ref_stack.emplace_back();
 			} break;
 			case Tok::FUNCTION: {
-				Function* function = state.get_func(tok.token.str);
-				for (Type param : function->param_types) {
-					if (!type_stack.back().is_known()) {
-						for (Type* type : ref_stack.back()) {
-							*type = param;
+				auto& funcs = state.get_functions((int)tok.i, tok.token.str);
+				if (funcs.empty()) throw Exception("Function not found", tok.token);
+				std::vector<Function*> valid_funcs;
+
+				std::vector<Type>                 args(type_stack.end() - tok.i, type_stack.end());
+				std::vector<std::vector<Type*>> ref_args(ref_stack.end() - tok.i, ref_stack.end());
+				type_stack.erase(type_stack.end() - tok.i, type_stack.end());
+				ref_stack.erase(  ref_stack.end() - tok.i,  ref_stack.end());
+
+				for (Function* func : funcs) {
+					if (func->allows(args)) {
+						valid_funcs.push_back(func);
+					}
+				}
+				assert(!valid_funcs.empty());
+				if (valid_funcs.size() > 2) throw Exception("Couldn't resolve func", tok.token);
+				for (size_t i = 0; i < tok.i; i++) {
+					if (!args[i].is_known()) {
+						for (Type* type : ref_args[i]) {
+							*type = valid_funcs[0]->param_types[i];
 						}
 					}
-					type_stack.pop_back();
-					ref_stack.pop_back();
 				}
-				type_stack.push_back(function->return_type);
+				tok.something = valid_funcs[0];
+				type_stack.push_back(valid_funcs[0]->return_type);
 				ref_stack.emplace_back();
 			} break;
 			case Tok::OP: {

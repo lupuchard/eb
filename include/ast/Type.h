@@ -32,9 +32,16 @@ public:
 	static Type parse(const std::string& name);
 	std::string to_string() const;
 
+	inline bool operator==(const Type& rhs) const {
+		return possible == rhs.possible;
+	}
+
 private:
 	std::set<Prim> possible;
 };
+inline bool operator!=(const Type& lhs, const Type& rhs) {
+	return !lhs.operator==(rhs);
+}
 
 const Type SIGNED   = Type(std::set<Prim> {Prim::I8, Prim::I16, Prim::I32, Prim::I64});
 const Type UNSIGNED = Type(std::set<Prim> {Prim::U8, Prim::U16, Prim::U32, Prim::U64});

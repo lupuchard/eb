@@ -61,12 +61,14 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 					params.push_back(type_to_llvm(func.param_types[j]));
 				}
 
-				std::string name = func.name_token.str;
-				name = name == "main" ? "eb$main" : name;
+				std::stringstream ss;
+				ss << func.name_token.str << "." << func.param_types.size() << "." << func.index;
+				std::string name = ss.str();
+				name = name == "main.0.0" ? "eb$main" : name;
 				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(name,
 						llvm::FunctionType::get(ret_type, llvm::ArrayRef<llvm::Type*>(params), false)
 				));
-				state.set_func_llvm(name, *llvm_func);
+				state.set_func_llvm(func, *llvm_func);
 
 				state.descend(func.block);
 				auto iter = llvm_func->arg_begin();
@@ -221,7 +223,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				type_stack.push_back(&var.type);
 			} break;
 			case Tok::FUNCTION: {
-				Function& func = *state.get_func(tok.token.str);
+				Function& func = *(Function*)tok.something;
 				std::vector<llvm::Value*> args;
 				args.resize(func.param_types.size());
 				for (int i = (int)func.param_types.size() - 1; i >= 0; i--) {
@@ -230,7 +232,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 					type_stack.pop_back();
 				}
 				value_stack.push_back(builder.CreateCall(
-						state.get_func_llvm(tok.token.str),
+						state.get_func_llvm(func),
 						llvm::ArrayRef<llvm::Value*>(args), func.name_token.str
 				));
 				type_stack.push_back(&func.return_type);

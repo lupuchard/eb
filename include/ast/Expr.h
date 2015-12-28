@@ -34,6 +34,7 @@ struct Tok {
 		double f;
 		bool b;
 		Op op;
+		void* something;
 	};
 };
 

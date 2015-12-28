@@ -1,0 +1,23 @@
+
+fn bark(x: Bool): I32 {
+	return 1;
+}
+fn bark(x: Bool, y: Bool): I32 {
+	return 2;
+}
+fn bark(x: Bool, y: I32): I32 {
+	return 3;
+}
+fn bark(x: I32): I32 {
+	return 4;
+}
+
+fn main(): I32 {
+	b := false;
+	i := 1;
+	if bark(true)    != 1 { return 1; }
+	if bark(true, b) != 2 { return 2; }
+	if bark(b, 5)    != 3 { return 3; }
+	if bark(i)       != 4 { return 4; }
+	return 0;
+}

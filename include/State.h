@@ -3,6 +3,7 @@
 
 #include "ast/Item.h"
 #include <unordered_map>
+#include <map>
 
 namespace llvm {
 	class Value;
@@ -52,24 +53,25 @@ public:
 	void ascend();
 
 	Variable& declare(std::string name, Type type);
-	Variable* get_var(const std::string& name);
+	Variable* get_var(const std::string& name) const;
 	Variable& next_var(const std::string& name);
 
 	// returns true if function already exists
 	bool declare(std::string name, Function& func);
-	Function* get_func(const std::string& name);
-	void set_func_llvm(const std::string& name, llvm::Function& func);
-	llvm::Function* get_func_llvm(const std::string& name);
+	const std::vector<Function*>& get_functions(int num_parameters, const std::string& name) const;
+	void set_func_llvm(const Function& func, llvm::Function& llvm_func);
+	llvm::Function* get_func_llvm(const Function& func);
 
 	void set_return(Type type);
 	Type get_return() const;
 
-	Loop* get_loop(int amount);
+	Loop* get_loop(int amount) const;
 	void create_loop();
 
 private:
-	std::unordered_map<std::string, Function*> functions;
-	std::unordered_map<std::string, llvm::Function*> llvm_functions;
+	// map of (name, num parameters) to a list of functions
+	std::map<std::pair<std::string, int>, std::vector<Function*>> functions;
+	std::unordered_map<const Function*, llvm::Function*> llvm_functions;
 	Type return_type;
 	Scope root_scope;
 	Scope* current_scope;

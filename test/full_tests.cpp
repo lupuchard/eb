@@ -68,4 +68,5 @@ TEST_CASE("full tests", "[full]") {
 	}
 	test("test/test_code/test1.eb", 0);
 	test("test/test_code/test2.eb", 0);
+	test("test/test_code/test3.eb", 0);
 }

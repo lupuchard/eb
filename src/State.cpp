@@ -1,3 +1,4 @@
+#include <iostream>
 #include "State.h"
 
 Scope& Scope::to_subscope(Block& block) {
@@ -76,7 +77,7 @@ void State::ascend() {
 Variable& State::declare(std::string name, Type type) {
 	return current_scope->declare(name, type);
 }
-Variable* State::get_var(const std::string& name) {
+Variable* State::get_var(const std::string& name) const {
 	return current_scope->get(name);
 }
 Variable& State::next_var(const std::string& name) {
@@ -84,21 +85,38 @@ Variable& State::next_var(const std::string& name) {
 }
 
 bool State::declare(std::string name, Function& func) {
-	auto iter = functions.find(name);
-	if (iter != functions.end()) return true;
-	functions[name] = &func;
+	auto key = std::make_pair(name, func.param_names.size());
+	auto iter = functions.find(key);
+	if (iter == functions.end()) {
+		std::vector<Function*> vec;
+		vec.push_back(&func);
+		functions[key] = vec;
+	} else {
+		for (Function* f : iter->second) {
+			if (f->param_types == func.param_types) {
+				return true;
+			}
+		}
+		func.index = (int)iter->second.size();
+		iter->second.push_back(&func);
+	}
 	return false;
 }
-Function* State::get_func(const std::string& name) {
-	auto iter = functions.find(name);
-	if (iter == functions.end()) return nullptr;
+const std::vector<Function*>& State::get_functions(int num_params, const std::string& name) const {
+	auto key = std::make_pair(name, num_params);
+	auto iter = functions.find(key);
+	if (iter == functions.end()) {
+		static std::vector<Function*> empty;
+		return empty;
+	}
 	return iter->second;
 }
-void State::set_func_llvm(const std::string& name, llvm::Function& get_func_llvm) {
-	llvm_functions[name] = &get_func_llvm;
+
+void State::set_func_llvm(const Function& func, llvm::Function& llvm_func) {
+	llvm_functions[&func] = &llvm_func;
 }
-llvm::Function* State::get_func_llvm(const std::string& name) {
-	return llvm_functions[name];
+llvm::Function* State::get_func_llvm(const Function& name) {
+	return llvm_functions[&name];
 }
 
 void State::set_return(Type type) {
@@ -108,7 +126,7 @@ Type State::get_return() const {
 	return return_type;
 }
 
-Loop* State::get_loop(int amount) {
+Loop* State::get_loop(int amount) const {
 	return current_scope->get_loop(amount);
 }
 void State::create_loop() {
