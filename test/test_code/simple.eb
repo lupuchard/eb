@@ -38,9 +38,7 @@ fn main(): I32 {
 
 // IMPROVEMENTS
 //   anywhere blocks
-//   semicolons optional
-//   functional ifs
-//     short circuiting
+//   short circuiting
 // NEXT
 //   namespaces
 //   modules/imports

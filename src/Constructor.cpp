@@ -107,7 +107,17 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 			}
 		}
 		case Token::KW_RETURN: return do_return(token);
-		case Token::KW_IF:     return do_if(token);
+		case Token::KW_IF: {
+			Expr* expr = new Expr();
+			index--;
+			do_expr(*expr);
+			if (expr->size() == 1) {
+				return std::unique_ptr<If>((If*)(*expr)[0].something);
+			}
+			std::unique_ptr<Statement> statement(new Statement(token, Statement::EXPR));
+			statement->expr.reset(expr);
+			return statement;
+		}
 		case Token::KW_WHILE:  return do_while(token);
 		case Token::KW_BREAK:  return do_break(token);
 		case Token::KW_CONTINUE:
