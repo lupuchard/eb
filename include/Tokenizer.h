@@ -35,5 +35,4 @@ private:
 	int column = 1;
 };
 
-
 #endif //EBC_TOKENIZER_H

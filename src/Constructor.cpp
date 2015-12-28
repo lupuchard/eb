@@ -12,9 +12,10 @@ Module Constructor::construct(const std::vector<Token>& tokens) {
 Module Constructor::do_module() {
 	Module module;
 	while (true) {
+		trim();
+		if (index >= tokens->size()) break;
 		auto item = do_item();
 		module.push_back(std::move(item));
-		if (index >= tokens->size()) break;
 	}
 	return module;
 }
@@ -31,6 +32,7 @@ std::unique_ptr<Function> Constructor::do_function() {
 	const Token& name_token = expect_ident();
 	std::unique_ptr<Function> function(new Function(name_token));
 	expect("(");
+	trim();
 
 	// parameters
 	const Token* param_token = &next();
@@ -43,6 +45,7 @@ std::unique_ptr<Function> Constructor::do_function() {
 		const Token& type_token = expect_ident();
 		function->param_types.push_back(Type::parse(type_token.str));
 		param_token = &next();
+		trim();
 		if (param_token->str == ",") param_token = &next();
 		else if (param_token->str != ")") throw Exception("Expected ',' or ')'", *param_token);
 	}
@@ -50,10 +53,12 @@ std::unique_ptr<Function> Constructor::do_function() {
 	// return type
 	const Token* colon_token = &next();
 	if (colon_token->str == ":") {
+		trim();
 		const Token& ret_token = expect_ident();
 		function->return_type = Type::parse(ret_token.str);
 		colon_token = &next();
 	}
+	trim();
 
 	if (colon_token->str != "{") throw Exception("Expected ':' or '{'", *colon_token);
 	function->block = do_block();
@@ -63,6 +68,7 @@ std::unique_ptr<Function> Constructor::do_function() {
 Block Constructor::do_block() {
 	Block block;
 	while (true) {
+		trim();
 		if (peek() == Token(Token::SYMBOL, "}")) {
 			next();
 			break;
@@ -105,7 +111,6 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 		case Token::KW_WHILE:  return do_while(token);
 		case Token::KW_BREAK:  return do_break(token);
 		case Token::KW_CONTINUE:
-			expect(";");
 			return std::unique_ptr<Statement>(new Statement(token, Statement::CONTINUE));
 		default: return do_expr(token);
 	}
@@ -118,12 +123,12 @@ std::unique_ptr<Declaration> Constructor::do_declare(const Token& ident) {
 		declaration.reset(new Declaration(ident));
 	} else if (token.form == Token::IDENT) {  // var: type
 		const Token& eq_token = next();
-		if (eq_token == Token(Token::SYMBOL, ";")) {
+		if (eq_token.form == Token::END) {
 			return std::unique_ptr<Declaration>(new Declaration(ident, token));
 		}
 		if (eq_token != Token(Token::SYMBOL, "=")) throw Exception("Expected '='", eq_token);
 		declaration.reset(new Declaration(ident, token));
-	} else if (token.str == ";") {
+	} else if (token.form == Token::END) {
 		declaration.reset(new Declaration(ident));
 		return declaration;
 	} else {
@@ -205,13 +210,13 @@ std::unique_ptr<While> Constructor::do_while(const Token& kw) {
 std::unique_ptr<Break> Constructor::do_break(const Token& kw) {
 	std::unique_ptr<Break> break_statement(new Break(kw));
 	const Token& token = next();
-	if (token.str != ";") {
+	if (token.form != Token::END) {
 		// you can do 'return *X' to break out of X loops
 		if (token.str != "*") throw Exception("Expected ';' or '*'", token);
 		const Token& amount = next();
 		if (amount.form != Token::INT) throw Exception("Expected integer", amount);
 		break_statement->amount = (int)amount.i;
-		expect(";");
+		trim();
 	}
 	return break_statement;
 }
@@ -224,7 +229,11 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 	int num_parameters = 0;
 	while (true) {
 		const Token& token = peek();
-		if (token == Token(Token::SYMBOL, terminator)) {
+		if (prev_was_op && token.form == Token::END) {
+			next();
+			continue;
+		}
+		if (token.form == Token::END || token.str == "}" || token.str == terminator) {
 			// the expression has terminated
 			while (!ops.empty()) {
 				if (ops.back() == Op::TEMP_PAREN) throw Exception("Unclosed parenthesis", token);
@@ -232,7 +241,7 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 				tokens.pop_back();
 				ops.pop_back();
 			}
-			next();
+			if (token.str != "}") next();
 			return;
 		}
 		if (param_ready && peek().str != ")") {
@@ -342,8 +351,14 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 	}
 }
 
+void Constructor::trim() {
+	while (peek().form == Token::END) next();
+}
+
 const Token& Constructor::next(int i) {
-	if (index + i - 1 >= tokens->size()) throw Exception("Unterminated block", (*tokens)[index - 1]);
+	if (index + i - 1 >= tokens->size()) {
+		throw Exception("Unterminated block", (*tokens)[index - 1]);
+	}
 	const Token& res = (*tokens)[index + i - 1];
 	index += i;
 	return res;

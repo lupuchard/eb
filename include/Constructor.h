@@ -28,6 +28,7 @@ private:
 	bool left_assoc(Op op);
 	int precedence(Op op);
 
+	void trim();
 	void expect(const std::string& str);
 	const Token& expect_ident();
 	const Token& next(int i = 1);

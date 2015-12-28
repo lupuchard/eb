@@ -20,6 +20,7 @@ void Tokenizer::do_whitespace() {
 	while (true) {
 		char c = str[index];
 		if (c == '\n') {
+			tokens.push_back(Token(Token::END, "\n", line, column));
 			line++;
 			column = 0;
 		} else if (isalpha(c) || c == '_' || !isascii(c)) {
@@ -112,6 +113,10 @@ void Tokenizer::do_symbol() {
 		return do_word();
 	} else if (isdigit(c) || (c == '.' && isdigit(str[index + 1]))) {
 		return do_number();
+	} else if (c == ';') {
+		tokens.push_back(Token(Token::END, ";", line, column));
+		column++;
+		index++;
 	} else if ((c == '!' || c == '>' || c == '<' || c == '=') && str[index + 1] == '=') {
 		add_symbol(str.substr(index, 2));
 		column += 2;

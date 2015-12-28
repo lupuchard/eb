@@ -9,22 +9,23 @@ fn maths(a: I32, b: I32): Bool {
 }
 
 fn something(): Bool {
-	return true && true && true || false;
+	return true &&
+		true && true || false
 }
 
 fn ifs(): Bool {
-	x := 5;
+	x := 5
 	if x != 5 {
-		return false;
+		return false
 	} else {
-		x := true;
+		x := true
 		if !x {
-			return false;
+			return false
 		} else if something() {
-			return true;
+			return true
 		}
 	}
-	false;
+	false
 }
 
 fn main(): I32 {
