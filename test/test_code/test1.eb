@@ -36,10 +36,8 @@ fn main(): I32 {
 }
 
 // IMPROVEMENTS
-//   function overloading
 //   anywhere blocks
 //   semicolons optional
-//   fib
 //   functional ifs
 //     short circuiting
 // NEXT

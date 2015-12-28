@@ -76,11 +76,15 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 	const Token& token = next();
 	switch (token.form) {
 		case Token::IDENT: {
-			const Token& token2 = next();
-			if      (token2.str == ":") return do_declare(token);
-			else if (token2.str == "=") return do_assign(token, Op::NOT, nullptr);
-			else {
-				expect("=");
+			const Token& token2 = peek();
+			if (token2.str == ":") {
+				next();
+				return do_declare(token);
+			} else if (token2.str == "=") {
+				next();
+				return do_assign(token, Op::NOT, nullptr);
+			} else if (peek(2).str == "=") {
+				next(2);
 				switch (token2.str[0]) {
 					case '+': return do_assign(token, Op::ADD,  &token2);
 					case '-': return do_assign(token, Op::SUB,  &token2);
@@ -91,6 +95,8 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 					case '^': return do_assign(token, Op::XOR,  &token2);
 					default: throw Exception("Expected ':', '=', or an operator", token2);
 				}
+			} else {
+				return do_expr(token);
 			}
 		}
 		case Token::KW_RETURN: return do_return(token);
@@ -100,7 +106,7 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 		case Token::KW_CONTINUE:
 			expect(";");
 			return std::unique_ptr<Statement>(new Statement(token, Statement::CONTINUE));
-		default: throw Exception("Invalid statement", token);
+		default: return do_expr(token);
 	}
 }
 
@@ -121,11 +127,11 @@ std::unique_ptr<Declaration> Constructor::do_declare(const Token& ident) {
 	}
 	Expr* expr = new Expr();
 	do_expr(*expr);
-	declaration->value.reset(expr);
+	declaration->expr.reset(expr);
 	return declaration;
 }
 
-std::unique_ptr<Assignment> Constructor::do_assign(
+std::unique_ptr<Statement> Constructor::do_assign(
 		const Token& ident, Op op, const Token* op_token
 ) {
 	Expr* expr = new Expr();
@@ -138,15 +144,23 @@ std::unique_ptr<Assignment> Constructor::do_assign(
 	} else {
 		do_expr(*expr);
 	}
-	std::unique_ptr<Assignment> assignment(new Assignment(ident));
-	assignment->value.reset(expr);
+	std::unique_ptr<Statement> assignment(new Statement(ident, Statement::ASSIGNMENT));
+	assignment->expr.reset(expr);
 	return assignment;
 }
 
-std::unique_ptr<Return> Constructor::do_return(const Token& kw) {
-	std::unique_ptr<Return> return_statement(new Return(kw));
-	return_statement->value.reset(new Expr());
-	do_expr(*return_statement->value);
+std::unique_ptr<Statement> Constructor::do_expr(const Token& kw) {
+	std::unique_ptr<Statement> expression(new Statement(kw, Statement::EXPR));
+	expression->expr.reset(new Expr());
+	index--;
+	do_expr(*expression->expr);
+	return expression;
+}
+
+std::unique_ptr<Statement> Constructor::do_return(const Token& kw) {
+	std::unique_ptr<Statement> return_statement(new Statement(kw, Statement::RETURN));
+	return_statement->expr.reset(new Expr());
+	do_expr(*return_statement->expr);
 	return return_statement;
 }
 
@@ -319,16 +333,18 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 	}
 }
 
-const Token& Constructor::next() {
-	if (index >= tokens->size()) throw Exception("Unterminated block", (*tokens)[index - 1]);
-	return (*tokens)[index++];
+const Token& Constructor::next(int i) {
+	if (index + i - 1 >= tokens->size()) throw Exception("Unterminated block", (*tokens)[index - 1]);
+	const Token& res = (*tokens)[index + i - 1];
+	index += i;
+	return res;
 }
-const Token& Constructor::peek() {
-	if (index >= tokens->size()) {
+const Token& Constructor::peek(int i) {
+	if (index + i - 1 >= tokens->size()) {
 		static Token end(Token::INVALID, "");
 		return end;
 	}
-	return (*tokens)[index];
+	return (*tokens)[index + i - 1];
 }
 void Constructor::expect(const std::string& str) {
 	const Token& token = next();

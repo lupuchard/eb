@@ -5,9 +5,10 @@
 #include <memory>
 
 struct Statement {
-	enum Form { DECLARATION, ASSIGNMENT, RETURN, IF, WHILE, CONTINUE, BREAK };
+	enum Form { DECLARATION, ASSIGNMENT, EXPR, RETURN, IF, WHILE, CONTINUE, BREAK };
 	Form form;
 	const Token& token;
+	std::unique_ptr<Expr> expr;
 	Statement(const Token& token, Form form): token(token), form(form) { }
 	virtual void _() const { } // MOST USEFUL METHOD DOES ALL THINGS
 };
@@ -20,17 +21,6 @@ struct Declaration: public Statement {
 	Declaration(const Token& token, const Token& type_token):
 			Statement(token, DECLARATION), type_token(&type_token) { }
 	const Token* type_token = nullptr;
-	std::unique_ptr<Expr> value;
-};
-
-struct Assignment: public Statement {
-	Assignment(const Token& token): Statement(token, ASSIGNMENT) { }
-	std::unique_ptr<Expr> value;
-};
-
-struct Return: public Statement {
-	Return(const Token& token): Statement(token, RETURN) { }
-	std::unique_ptr<Expr> value;
 };
 
 struct If: public Statement {

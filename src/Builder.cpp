@@ -96,21 +96,22 @@ bool Builder::do_block(llvm::IRBuilder<>& builder, Block& block, State& state) {
 				auto llvm_val = builder.CreateAlloca(llvm_type, nullptr, decl.token.str);
 				var.llvm = llvm_val;
 				llvm::Value* assigned;
-				if (decl.value == nullptr) {
+				if (decl.expr == nullptr) {
 					assigned = default_value(var.type, llvm_type);
 				} else {
-					assigned = do_expr(builder, *decl.value, state);
+					assigned = do_expr(builder, *decl.expr, state);
 				}
 				builder.CreateStore(assigned, llvm_val);
 			} break;
 			case Statement::ASSIGNMENT: {
-				Assignment& assignment = (Assignment&)statement;
-				llvm::Value* assigned = do_expr(builder, *assignment.value, state);
-				builder.CreateStore(assigned, state.get_var(assignment.token.str)->llvm);
+				llvm::Value* assigned = do_expr(builder, *statement.expr, state);
+				builder.CreateStore(assigned, state.get_var(statement.token.str)->llvm);
+			} break;
+			case Statement::EXPR: {
+				do_expr(builder, *statement.expr, state);
 			} break;
 			case Statement::RETURN: {
-				Return& return_statement = (Return&)statement;
-				llvm::Value* returned = do_expr(builder, *return_statement.value, state);
+				llvm::Value* returned = do_expr(builder, *statement.expr, state);
 				builder.CreateRet(returned);
 				return true;
 			}

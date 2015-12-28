@@ -25,15 +25,15 @@ TEST_CASE("assignment", "[constructor]") {
 	Block& block = ((Function&)*mod[0]).block;
 	REQUIRE(block.size() == 2);
 
-	Assignment& assignment1 = dynamic_cast<Assignment&>(*block[0]);
+	Statement& assignment1 = *block[0];
 	REQUIRE(assignment1.token.form == Token::IDENT);
 	REQUIRE(assignment1.token.str == "x");
 	REQUIRE(assignment1.token == Token(Token::IDENT, "x"));
-	REQUIRE(assignment1.value->size() == 3);
+	REQUIRE(assignment1.expr->size() == 3);
 
-	Assignment& assignment2 = dynamic_cast<Assignment&>(*block[1]);
+	Statement& assignment2 = *block[1];
 	REQUIRE(assignment2.token == Token(Token::IDENT, "x"));
-	Expr& expr = *assignment2.value;
+	Expr& expr = *assignment2.expr;
 	REQUIRE(expr.size() == 5);
 	REQUIRE(expr[0].form == Tok::VAR);
 	REQUIRE(&expr[0].token == &assignment2.token);
@@ -51,15 +51,15 @@ TEST_CASE("declaration", "[constructor]") {
 
 	Declaration& declaration1 = dynamic_cast<Declaration&>(*block[0]);
 	REQUIRE(declaration1.token == Token(Token::IDENT, "x"));
-	REQUIRE(declaration1.value->size() == 1);
+	REQUIRE(declaration1.expr->size() == 1);
 
 	Declaration& declaration2 = dynamic_cast<Declaration&>(*block[1]);
 	REQUIRE(declaration2.token == Token(Token::IDENT, "y"));
-	REQUIRE(declaration2.value->size() == 3);
+	REQUIRE(declaration2.expr->size() == 3);
 
 	Declaration& declaration3 = dynamic_cast<Declaration&>(*block[2]);
 	REQUIRE(declaration3.token == Token(Token::IDENT, "z"));
-	REQUIRE(declaration3.value.get() == nullptr);
+	REQUIRE(declaration3.expr.get() == nullptr);
 }
 
 TEST_CASE("expression", "[constructor]") {
@@ -70,7 +70,7 @@ TEST_CASE("expression", "[constructor]") {
 	Module mod = constructor.construct(tokens);
 	Block& block = ((Function&)*mod[0]).block;
 
-	Expr& expr1 = *dynamic_cast<Assignment&>(*block[0]).value;
+	Expr& expr1 = *block[0]->expr;
 	REQUIRE(expr1.size() == 10);
 	REQUIRE(expr1[0].i == 5);
 	REQUIRE(expr1[1].i == 4);
@@ -83,7 +83,7 @@ TEST_CASE("expression", "[constructor]") {
 	REQUIRE(expr1[8].op == Op::DIV);
 	REQUIRE(expr1[9].op == Op::SUB);
 
-	Expr& expr2 = *dynamic_cast<Assignment&>(*block[1]).value;
+	Expr& expr2 = *block[1]->expr;
 	REQUIRE(expr2.size() == 5);
 	REQUIRE(expr2[0].b);
 	REQUIRE(expr2[1].i == 3);
@@ -100,16 +100,16 @@ TEST_CASE("function call", "[constructor]") {
 	Module mod = constructor.construct(tokens);
 	Block& block = ((Function&)*mod[0]).block;
 
-	Expr& expr1 = *dynamic_cast<Assignment&>(*block[0]).value;
+	Expr& expr1 = *block[0]->expr;
 	REQUIRE(expr1[4].form == Tok::FUNCTION);
 	REQUIRE(expr1[4].token.str == "foo");
 	REQUIRE(expr1[4].i == 2);
 
-	Expr& expr2 = *dynamic_cast<Assignment&>(*block[1]).value;
+	Expr& expr2 = *block[1]->expr;
 	REQUIRE(expr2[0].form == Tok::FUNCTION);
 	REQUIRE(expr2[0].i == 0);
 
-	Expr& expr3 = *dynamic_cast<Assignment&>(*block[2]).value;
+	Expr& expr3 = *block[2]->expr;
 	REQUIRE(expr3[3].form == Tok::FUNCTION);
 	REQUIRE(expr3[3].i == 3);
 }
@@ -129,7 +129,7 @@ TEST_CASE("if", "[constructor]") {
 	REQUIRE((*if_statement.conditions[1])[2].op == Op::GT);
 
 	REQUIRE(if_statement.blocks.size() == 3);
-	REQUIRE(dynamic_cast<Assignment&>(*if_statement.blocks[0][0]).token.str == "x");
-	REQUIRE(dynamic_cast<Assignment&>(*if_statement.blocks[1][0]).token.str == "y");
-	REQUIRE(dynamic_cast<Assignment&>(*if_statement.blocks[2][0]).token.str == "z");
+	REQUIRE(if_statement.blocks[0][0]->token.str == "x");
+	REQUIRE(if_statement.blocks[1][0]->token.str == "y");
+	REQUIRE(if_statement.blocks[2][0]->token.str == "z");
 }

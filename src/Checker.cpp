@@ -32,35 +32,36 @@ void Checker::check_types(Block& block, State& state) {
 				if (decl.type_token != nullptr) {
 					type = Type::parse(decl.type_token->str);
 				}
-				if (decl.value.get() != nullptr) {
-					type = type.merge(type_of(*decl.value, state, decl.token));
+				if (decl.expr.get() != nullptr) {
+					type = type.merge(type_of(*decl.expr, state, decl.token));
 				}
 				state.declare(decl.token.str, type);
 			} break;
 			case Statement::ASSIGNMENT: {
-				Assignment& assign = (Assignment&)statement;
-				Type type = type_of(*assign.value, state, assign.token);
-				Variable* var = state.get_var(assign.token.str);
+				Type type = type_of(*statement.expr, state, statement.token);
+				Variable* var = state.get_var(statement.token.str);
 				if (var == nullptr) {
-					throw Exception("No variable of this name found", assign.token);
+					throw Exception("No variable of this name found", statement.token);
 				} else if (var->is_param) {
-					throw Exception("You may not assign to parameters", assign.token);
+					throw Exception("You may not assign to parameters", statement.token);
 				}
 				Type t = var->type.merge(type);
 				if (!t.is_valid()) {
 					throw Exception("Cannot assign " + type.to_string() + " to variable of " +
-					                "type " + var->type.to_string(), assign.token);
+					                "type " + var->type.to_string(), statement.token);
 				}
 				var->type = t;
 			} break;
+			case Statement::EXPR: {
+				type_of(*statement.expr, state, statement.token);
+			} break;
 			case Statement::RETURN: {
-				Return& ret = (Return&)statement;
 				if (state.get_return().get() == Prim::VOID) break;
-				Type type = type_of(*ret.value, state, ret.token);
+				Type type = type_of(*statement.expr, state, statement.token);
 				Type t = state.get_return().merge(type);
 				if (!t.is_valid()) {
-					throw Exception("Cannot return " + type.to_string() + "from function " +
-					                "returning " + state.get_return().to_string(), ret.token);
+					throw Exception("Cannot return " + type.to_string() + "from func returning " +
+					                state.get_return().to_string(), statement.token);
 				}
 			} break;
 			case Statement::IF: {
@@ -247,17 +248,18 @@ void Checker::complete_lit_types(Block &block, State& state) {
 			case Statement::DECLARATION: {
 				Declaration& declaration = (Declaration&)statement;
 				Type type = state.next_var(declaration.token.str).type;
-				complete_expr(state, *declaration.value, type);
+				complete_expr(state, *declaration.expr, type);
 			} break;
 			case Statement::ASSIGNMENT: {
-				Assignment& assignment = (Assignment&)statement;
-				Type type = state.get_var(assignment.token.str)->type;
-				complete_expr(state, *assignment.value, type);
+				Type type = state.get_var(statement.token.str)->type;
+				complete_expr(state, *statement.expr, type);
+			} break;
+			case Statement::EXPR: {
+				complete_expr(state, *statement.expr, Type());
 			} break;
 			case Statement::RETURN: {
-				Return& return_statement = (Return&)statement;
 				Type type = state.get_return();
-				if (type.get() != Prim::VOID) complete_expr(state, *return_statement.value, type);
+				if (type.get() != Prim::VOID) complete_expr(state, *statement.expr, type);
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;

@@ -1,0 +1,24 @@
+
+fn fib1(in: I32): I32 {
+	prev := 0;
+	res := 1;
+	curr := 0;
+	while curr < in {
+		temp := res;
+		res += prev;
+		prev = temp;
+		curr += 1;
+	}
+	return res;
+}
+
+fn fib2(in: I32): I32 {
+	if in <= 1 { return 1; }
+	return fib2(in - 2) + fib2(in - 1);
+}
+
+fn main(): I32 {
+	if fib1(10) != 89 { return 1; }
+	if fib2(10) != 89 { return 2; }
+	return 0;
+}
