@@ -1,4 +1,5 @@
 #include "Constructor.h"
+#include "Exception.h"
 #include <unordered_map>
 #include <cassert>
 
@@ -394,16 +395,4 @@ int Constructor::precedence(Op op) {
 		case Op::OR:                                          return  0;
 		case Op::TEMP_PAREN: case Op::TEMP_FUNC:              return -1;
 	}
-}
-
-
-Constructor::Exception::Exception(std::string desc, Token token):
-		std::invalid_argument(desc), desc(desc), token(token) {
-	std::stringstream ss;
-	ss << "line " << token.line << ", column " << token.column << " (" << token.str << "): " << desc;
-	this->desc = ss.str();
-}
-
-const char* Constructor::Exception::what() const throw() {
-	return desc.c_str();
 }

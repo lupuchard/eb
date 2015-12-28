@@ -27,6 +27,7 @@ struct If: public Statement {
 	If(const Token& token): Statement(token, IF) { }
 	std::vector<std::unique_ptr<Expr>> conditions;
 	std::vector<Block> blocks;
+	std::vector<bool> returns;
 };
 
 struct While: public Statement {

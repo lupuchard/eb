@@ -1,20 +1,13 @@
 #ifndef EBC_CONSTRUCTOR_H
 #define EBC_CONSTRUCTOR_H
 
-#include "ast/Item.h"
+#include "ast/Module.h"
 #include <memory>
 #include <ast/Expr.h>
 
 class Constructor {
 public:
 	Module construct(const std::vector<Token>& tokens);
-
-	struct Exception: std::invalid_argument {
-		Exception(std::string desc, Token token);
-		virtual const char* what() const throw();
-		std::string desc;
-		Token token;
-	};
 
 private:
 	Module                       do_module();

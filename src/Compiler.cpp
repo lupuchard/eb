@@ -34,11 +34,11 @@ void Compiler::compile(const std::string& code, const std::string& out_file) {
 }
 
 void Compiler::gen_ll(const std::string& code, const std::string& out_file) {
-	Tokenizer tokenizer(code);
+	/*Tokenizer tokenizer(code);
 	auto tokens = tokenizer.get_tokens();
 	Module mod = constructor.construct(tokens);
 	State scope;
 	checker.check_types(mod, scope);
 	checker.complete_types(mod, scope);
-	builder.build(mod, scope, out_file + ".ll");
+	builder.build(mod, scope, out_file + ".ll");*/
 }

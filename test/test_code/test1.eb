@@ -24,14 +24,14 @@ fn ifs(): Bool {
 			return true;
 		}
 	}
-	return false;
+	false;
 }
 
 fn main(): I32 {
 	if maths(6, 12) {
-		return 0;
+		0;
 	} else {
-		return 1;
+		1;
 	}
 }
 

@@ -78,6 +78,7 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				llvm::IRBuilder<> builder(create_basic_block("entry"));
 
 				do_block(builder, func.block, state);
+
 				state.ascend();
 			} break;
 		}
@@ -88,109 +89,122 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 bool Builder::do_block(llvm::IRBuilder<>& builder, Block& block, State& state) {
 	for (size_t i = 0; i < block.size(); i++) {
 		Statement& statement = *block[i];
-		switch (statement.form) {
-			case Statement::DECLARATION: {
-				Declaration& decl = (Declaration&)statement;
-				Variable& var = state.next_var(decl.token.str);
-				auto llvm_type = type_to_llvm(var.type);
-				auto llvm_val = builder.CreateAlloca(llvm_type, nullptr, decl.token.str);
-				var.llvm = llvm_val;
-				llvm::Value* assigned;
-				if (decl.expr == nullptr) {
-					assigned = default_value(var.type, llvm_type);
-				} else {
-					assigned = do_expr(builder, *decl.expr, state);
-				}
-				builder.CreateStore(assigned, llvm_val);
-			} break;
-			case Statement::ASSIGNMENT: {
-				llvm::Value* assigned = do_expr(builder, *statement.expr, state);
-				builder.CreateStore(assigned, state.get_var(statement.token.str)->llvm);
-			} break;
-			case Statement::EXPR: {
-				do_expr(builder, *statement.expr, state);
-			} break;
-			case Statement::RETURN: {
-				llvm::Value* returned = do_expr(builder, *statement.expr, state);
-				builder.CreateRet(returned);
-				return true;
-			}
-			case Statement::IF: {
-				If& if_statement = (If&)statement;
-
-				llvm::BasicBlock* end = create_basic_block("endif");
-				llvm::BasicBlock* if_false = nullptr;
-
-				bool exits = false;
-
-				for (size_t j = 0; j < if_statement.conditions.size(); j++) {
-					llvm::Value* cond = do_expr(builder, *if_statement.conditions[j], state);
-					llvm::BasicBlock* if_true = create_basic_block("if");
-					if_false = create_basic_block("else");
-					builder.CreateCondBr(cond, if_true, if_false);
-
-					builder.SetInsertPoint(if_true);
-					Block& if_block = if_statement.blocks[j];
-					state.descend(if_block);
-					if (!do_block(builder, if_block, state)) {
-						builder.CreateBr(end);
-						exits = true;
-					}
-					state.ascend();
-
-					builder.SetInsertPoint(if_false);
-				}
-
-				if (if_statement.conditions.size() < if_statement.blocks.size()) {
-					Block& else_block = if_statement.blocks.back();
-					state.descend(else_block);
-					if (!do_block(builder, else_block, state)) {
-						builder.CreateBr(end);
-						exits = true;
-					}
-					state.ascend();
-				} else {
-					builder.CreateBr(end);
-					exits = true;
-				}
-
-				if (exits) {
-					end->moveAfter(if_false);
-					builder.SetInsertPoint(end);
-				} else {
-					end->eraseFromParent();
-				}
-			} break;
-			case Statement::WHILE: {
-				While& while_statement = (While&)statement;
-				llvm::BasicBlock* start   = create_basic_block("start");
-				llvm::BasicBlock* if_true = create_basic_block("loop");
-				llvm::BasicBlock* end     = create_basic_block("end");
-				builder.CreateBr(start);
-				builder.SetInsertPoint(start);
-				llvm::Value* cond = do_expr(builder, *while_statement.condition, state);
-				builder.CreateCondBr(cond, if_true, end);
-				builder.SetInsertPoint(if_true);
-				state.descend(while_statement.block);
-				Loop& loop = *state.get_loop(1);
-				loop.start = start;
-				loop.end   = end;
-				do_block(builder, while_statement.block, state);
-				state.ascend();
-				builder.CreateBr(start);
-				builder.SetInsertPoint(end);
-			} break;
-			case Statement::CONTINUE:
-				builder.CreateBr(state.get_loop(1)->start);
-				return true;
-			case Statement::BREAK: {
-				Break& break_statement = (Break&)statement;
-				builder.CreateBr(state.get_loop(break_statement.amount)->end);
-				return true;
-			}
+		do_statement(builder, statement, state);
+		if (statement.form == Statement::RETURN ||
+			statement.form == Statement::BREAK ||
+			statement.form == Statement::CONTINUE) {
+			return true;
 		}
 	}
 	return false;
+}
+
+llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, State& state) {
+	llvm::Value* drop = nullptr;
+	switch (statement.form) {
+		case Statement::DECLARATION: {
+			Declaration& decl = (Declaration&)statement;
+			Variable& var = state.next_var(decl.token.str);
+			auto llvm_type = type_to_llvm(var.type);
+			auto llvm_val = b.CreateAlloca(llvm_type, nullptr, decl.token.str);
+			var.llvm = llvm_val;
+			llvm::Value* assigned;
+			if (decl.expr == nullptr) {
+				assigned = default_value(var.type, llvm_type);
+			} else {
+				assigned = do_expr(b, *decl.expr, state);
+			}
+			b.CreateStore(assigned, llvm_val);
+		} break;
+		case Statement::ASSIGNMENT: {
+			llvm::Value* assigned = do_expr(b, *statement.expr, state);
+			b.CreateStore(assigned, state.get_var(statement.token.str)->llvm);
+		} break;
+		case Statement::EXPR: {
+			drop = do_expr(b, *statement.expr, state);
+		} break;
+		case Statement::RETURN: {
+			llvm::Value* returned = do_expr(b, *statement.expr, state);
+			b.CreateRet(returned);
+		} break;
+		case Statement::IF: {
+			If& if_statement = (If&)statement;
+
+			llvm::BasicBlock* end = create_basic_block("endif");
+			llvm::BasicBlock* if_false = nullptr;
+
+			bool exits = false;
+
+			// TODO: refactor here
+
+			for (size_t j = 0; j < if_statement.conditions.size(); j++) {
+				llvm::Value* cond = do_expr(b, *if_statement.conditions[j], state);
+				llvm::BasicBlock* if_true = create_basic_block("if");
+				if_false = create_basic_block("else");
+				b.CreateCondBr(cond, if_true, if_false);
+
+				b.SetInsertPoint(if_true);
+				Block& if_block = if_statement.blocks[j];
+
+				state.descend(if_block);
+				if (!do_block(b, if_block, state)) {
+					b.CreateBr(end);
+					exits = true;
+				}
+				state.ascend();
+
+				b.SetInsertPoint(if_false);
+			}
+
+			if (if_statement.conditions.size() < if_statement.blocks.size()) {
+				Block& else_block = if_statement.blocks.back();
+
+				state.descend(else_block);
+				if (!do_block(b, else_block, state)) {
+					b.CreateBr(end);
+					exits = true;
+				}
+				state.ascend();
+			} else {
+				b.CreateBr(end);
+				exits = true;
+			}
+
+			if (exits) {
+				end->moveAfter(if_false);
+				b.SetInsertPoint(end);
+			} else {
+				end->eraseFromParent();
+			}
+		} break;
+		case Statement::WHILE: {
+			While& while_statement = (While&)statement;
+			llvm::BasicBlock* start   = create_basic_block("start");
+			llvm::BasicBlock* if_true = create_basic_block("loop");
+			llvm::BasicBlock* end     = create_basic_block("end");
+			b.CreateBr(start);
+			b.SetInsertPoint(start);
+			llvm::Value* cond = do_expr(b, *while_statement.condition, state);
+			b.CreateCondBr(cond, if_true, end);
+			b.SetInsertPoint(if_true);
+			state.descend(while_statement.block);
+			Loop& loop = *state.get_loop(1);
+			loop.start = start;
+			loop.end   = end;
+			do_block(b, while_statement.block, state);
+			state.ascend();
+			b.CreateBr(start);
+			b.SetInsertPoint(end);
+		} break;
+		case Statement::CONTINUE:
+			b.CreateBr(state.get_loop(1)->start);
+			break;
+		case Statement::BREAK: {
+			Break& break_statement = (Break&)statement;
+			b.CreateBr(state.get_loop(break_statement.amount)->end);
+		} break;
+	}
+	return drop;
 }
 
 llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& state) {

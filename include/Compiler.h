@@ -3,7 +3,6 @@
 
 #include "Tokenizer.h"
 #include "Constructor.h"
-#include "Checker.h"
 #include "Builder.h"
 #include <string>
 
@@ -15,7 +14,6 @@ public:
 
 private:
 	Constructor constructor;
-	Checker     checker;
 	Builder     builder;
 };
 

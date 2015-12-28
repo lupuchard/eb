@@ -1,7 +1,7 @@
 #ifndef EBC_SCOPE_H
 #define EBC_SCOPE_H
 
-#include "ast/Item.h"
+#include "ast/Module.h"
 #include <unordered_map>
 #include <map>
 

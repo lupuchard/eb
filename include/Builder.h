@@ -2,7 +2,7 @@
 #define EBC_BUILDER_H
 
 #include "State.h"
-#include "ast/Item.h"
+#include "ast/Module.h"
 
 #include "llvm/IR/IRBuilder.h"
 
@@ -15,6 +15,7 @@ public:
 private:
 	void do_module(Module& module, llvm::Module& llvm_module, State& state);
 	bool do_block(llvm::IRBuilder<>& builder, Block& block, State& state);
+	llvm::Value* do_statement(llvm::IRBuilder<>& builder, Statement& statement, State& state);
 	llvm::Value* do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& state);
 	void do_op(llvm::IRBuilder<>& builder, Op op, Type& type,
 	           std::vector<llvm::Value*>& value_stack, std::vector<Type*>& type_stack);

@@ -1,7 +1,8 @@
 #include "Tokenizer.h"
 #include "Constructor.h"
-#include "Checker.h"
+#include "passes/Passer.h"
 #include "Builder.h"
+#include "Exception.h"
 #include "catch.hpp"
 #include <iostream>
 #include <fstream>
@@ -30,23 +31,18 @@ void test(const std::string& filename, int expected_result) {
 	Module module;
 	try {
 		module = constructor.construct(tokenizer.get_tokens());
-	} catch (Constructor::Exception e) {
+	} catch (Exception e) {
 		FAIL("Constructor failed for '" << filename << "': " << e.what());
 	}
-	Checker checker;
+	Passer passer;
 	State state;
 	try {
-		checker.check_types(module, state);
-		checker.complete_types(module, state);
-	} catch (Checker::Exception e) {
-		FAIL("Checker failed for '" << filename << "': " << e.what());
+		passer.pass(module, state);
+	} catch (Exception e) {
+		FAIL("Passer failed for '" << filename << "': " << e.what());
 	}
 	Builder builder;
-	try {
-		builder.build(module, state, "out.ll");
-	} catch (Checker::Exception e) {
-		FAIL("Builder failed for '" << filename << "': " << e.what());
-	}
+	builder.build(module, state, "out.ll");
 	if (exec("llc out.ll")) FAIL("LLVM compilation failed");
 	if (exec("clang -o out out.s shim.a")) FAIL("Linking failed");
 
