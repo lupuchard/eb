@@ -12,7 +12,7 @@ enum class Op {
 };
 
 struct Tok {
-	enum Form { INT_LIT, FLOAT_LIT, BOOL_LIT, OP, VAR, FUNCTION };
+	enum Form { INT_LIT, FLOAT_LIT, BOOL_LIT, OP, VAR, FUNCTION, IF };
 
 	Tok(const Token& token, Form form, Type type = Type()):
 			token(token), form(form), type(type) { }
@@ -24,6 +24,15 @@ struct Tok {
 			form(FLOAT_LIT), token(token), f(f), type(type) { }
 	Tok(const Token& token, bool b):
 			form(BOOL_LIT), token(token), b(b), type(Prim::BOOL) { }
+
+	// c++ is garbage
+	inline Tok& operator=(const Tok& rhs) {
+		if (this != &rhs) {
+			this->~Tok();
+			new (this) Tok(rhs);
+		}
+		return *this;
+	}
 
 	const Token& token;
 	Type type;

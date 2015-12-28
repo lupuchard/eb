@@ -110,11 +110,14 @@ llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, S
 			var.llvm = llvm_val;
 			llvm::Value* assigned;
 			if (decl.expr == nullptr) {
+				// TODO: require all variables be initialized before used, so no defaults
 				assigned = default_value(var.type, llvm_type);
 			} else {
 				assigned = do_expr(b, *decl.expr, state);
 			}
-			b.CreateStore(assigned, llvm_val);
+			if (assigned != nullptr) {
+				b.CreateStore(assigned, llvm_val);
+			}
 		} break;
 		case Statement::ASSIGNMENT: {
 			llvm::Value* assigned = do_expr(b, *statement.expr, state);
@@ -263,8 +266,10 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 llvm::Constant* Builder::default_value(const Type& type, llvm::Type* llvm_type) {
 	if (FLOAT.has(type.get())) {
 		return llvm::ConstantFP::get(llvm_type, 0);
-	} else {
+	} else if (NUMBER.has(type.get())) {
 		return llvm::ConstantInt::get(llvm_type, 0);
+	} else {
+		return nullptr;
 	}
 }
 

@@ -28,7 +28,7 @@ fn ifs(): Bool {
 }
 
 fn main(): I32 {
-	if maths(6, 12) {
+	if maths(6, 12) && ifs() {
 		0;
 	} else {
 		1;

@@ -62,8 +62,9 @@ TEST_CASE("full tests", "[full]") {
 		system("clang -c shim.c");
 		system("ar rcs shim.a shim.o");
 	}
-	test("test/test_code/test1.eb", 0);
-	test("test/test_code/test2.eb", 0);
-	test("test/test_code/test3.eb", 0);
+	test("test/test_code/simple.eb", 0);
+	test("test/test_code/loops.eb", 0);
+	test("test/test_code/functional.eb", 0);
+	test("test/test_code/overloading.eb", 0);
 	test("test/test_code/fib.eb", 0);
 }

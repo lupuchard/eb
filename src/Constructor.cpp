@@ -114,7 +114,7 @@ std::unique_ptr<Statement> Constructor::do_statement() {
 std::unique_ptr<Declaration> Constructor::do_declare(const Token& ident) {
 	const Token& token = next();
 	std::unique_ptr<Declaration> declaration;
-	if (token == Token(Token::SYMBOL, "=")) { // var := val
+	if (token.str == "=") { // var := val
 		declaration.reset(new Declaration(ident));
 	} else if (token.form == Token::IDENT) {  // var: type
 		const Token& eq_token = next();
@@ -123,6 +123,9 @@ std::unique_ptr<Declaration> Constructor::do_declare(const Token& ident) {
 		}
 		if (eq_token != Token(Token::SYMBOL, "=")) throw Exception("Expected '='", eq_token);
 		declaration.reset(new Declaration(ident, token));
+	} else if (token.str == ";") {
+		declaration.reset(new Declaration(ident));
+		return declaration;
 	} else {
 		throw Exception("Expected '=' or identifier.", token);
 	}
@@ -244,6 +247,11 @@ void Constructor::do_expr(Expr& expr, const std::string& terminator) {
 			case Token::FLOAT: expr.push_back(Tok(token, token.f, token.type)); break;
 			case Token::KW_TRUE:  expr.push_back(Tok(token, true)); break;
 			case Token::KW_FALSE: expr.push_back(Tok(token, false)); break;
+			case Token::KW_IF: {
+				Tok tok(token, Tok::IF);
+				tok.something = do_if(token).release();
+				expr.push_back(tok);
+			} break;
 			case Token::IDENT:
 				if (peek().str == "(") {
 					ops.push_back(Op::TEMP_FUNC);

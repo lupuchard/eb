@@ -23,7 +23,7 @@ void LitCompleter::complete(Block& block, State& state) {
 			case Statement::DECLARATION: {
 				Declaration& declaration = (Declaration&)statement;
 				Type type = state.next_var(declaration.token.str).type;
-				complete(*declaration.expr, state, type);
+				if (declaration.expr != nullptr) complete(*declaration.expr, state, type);
 			} break;
 			case Statement::ASSIGNMENT: {
 				Type type = state.get_var(statement.token.str)->type;

@@ -1,0 +1,18 @@
+
+fn main(): I32 {
+	x := true;
+	y := if x { 3; } else { 4; };
+	if y != 3 {
+		return 1;
+	}
+
+	x := false;
+	y := if  x { 1; } else {
+		5 + if !x { 2; } else { 3; };
+	};
+	if y != 7 {
+		return 2;
+	}
+
+	return 0;
+}
