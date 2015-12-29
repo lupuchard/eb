@@ -8,15 +8,14 @@ void LitCompleter::complete(Module& module, State& state) {
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
-				state.descend(func.block);
 				complete(func.block, state);
-				state.ascend();
 			} break;
 		}
 	}
 }
 
 void LitCompleter::complete(Block& block, State& state) {
+	state.descend(block);
 	for (size_t i = 0; i < block.size(); i++) {
 		Statement& statement = *block[i];
 		switch (statement.form) {
@@ -38,25 +37,19 @@ void LitCompleter::complete(Block& block, State& state) {
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				for (size_t j = 0; j < if_statement.conditions.size(); j++) {
-					complete(*if_statement.conditions[j], state, Type(Prim::BOOL));
-				}
-				for (Block& if_block : if_statement.blocks) {
-					state.descend(if_block);
-					complete(if_block, state);
-					state.ascend();
-				}
+				complete(*if_statement.expr, state, Type(Prim::BOOL));
+				complete(if_statement.true_block, state);
+				complete(if_statement.else_block, state);
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				complete(*while_statement.condition, state, Type(Prim::BOOL));
-				state.descend(while_statement.block);
+				complete(*while_statement.expr, state, Type(Prim::BOOL));
 				complete(while_statement.block, state);
-				state.ascend();
 			} break;
 			default: break;
 		}
 	}
+	state.ascend();
 }
 
 void LitCompleter::complete(Expr& expr, State& state, Type final_type) {

@@ -121,15 +121,14 @@ TEST_CASE("if", "[constructor]") {
 	Constructor constructor;
 	Module mod = constructor.construct(tokens);
 	Block& block = ((Function&)*mod[0]).block;
+
 	REQUIRE(block.size() == 1);
 	If& if_statement = dynamic_cast<If&>(*block[0]);
+	REQUIRE((*if_statement.expr)[2].op == Op::LT);
+	If& elif_statement = dynamic_cast<If&>(*if_statement.else_block[0]);
+	REQUIRE((*elif_statement.expr)[2].op == Op::GT);
 
-	REQUIRE(if_statement.conditions.size() == 2);
-	REQUIRE((*if_statement.conditions[0])[2].op == Op::LT);
-	REQUIRE((*if_statement.conditions[1])[2].op == Op::GT);
-
-	REQUIRE(if_statement.blocks.size() == 3);
-	REQUIRE(if_statement.blocks[0][0]->token.str == "x");
-	REQUIRE(if_statement.blocks[1][0]->token.str == "y");
-	REQUIRE(if_statement.blocks[2][0]->token.str == "z");
+	REQUIRE(  if_statement.true_block[0]->token.str == "x");
+	REQUIRE(elif_statement.true_block[0]->token.str == "y");
+	REQUIRE(elif_statement.else_block[0]->token.str == "z");
 }

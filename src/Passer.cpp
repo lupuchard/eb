@@ -1,13 +1,16 @@
 #include "passes/Passer.h"
 
 void Passer::pass(Module& module, State& state) {
+	// Does the short circuiting.
+	//circuiter.shorten(module);
+
 	// Insures all paths return a value and adds implicit returns when necessary.
 	// Transforms assignment ifs.
 	return_checker.check(module);
 
 	// Infers as much type information as possible.
 	// Fails if any types don't match.
-	// Checks validity of breaks/continues for some reason.
+	// Also checks validity of breaks/continues for some reason.
 	type_checker.check(module, state);
 
 	// Numerically ambiguous variables are set to either I32 or F64.

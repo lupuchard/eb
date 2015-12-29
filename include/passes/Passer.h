@@ -3,6 +3,7 @@
 
 #include "ast/Module.h"
 #include "State.h"
+#include "passes/Circuiter.h"
 #include "passes/TypeChecker.h"
 #include "passes/LitCompleter.h"
 #include "passes/VarCompleter.h"
@@ -13,6 +14,7 @@ public:
 	void pass(Module& module, State& state);
 
 private:
+	Circuiter circuiter;
 	ReturnChecker return_checker;
 	TypeChecker type_checker;
 	VarCompleter var_completer;

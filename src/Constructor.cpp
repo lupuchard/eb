@@ -185,18 +185,16 @@ std::unique_ptr<Statement> Constructor::do_return(const Token& kw) {
 
 std::unique_ptr<If> Constructor::do_if(const Token& kw) {
 	std::unique_ptr<If> if_statement(new If(kw));
-	if_statement->conditions.emplace_back(new Expr());
-	do_expr(*if_statement->conditions[0], "{");
-	if_statement->blocks.push_back(do_block());
-	while (peek().form == Token::KW_ELSE) {
+	if_statement->expr.reset(new Expr());
+	do_expr(*if_statement->expr, "{");
+	if_statement->true_block = do_block();
+	if (peek().form == Token::KW_ELSE) {
 		next();
 		const Token& if_tok = next();
 		if (if_tok.form == Token::KW_IF) {
-			if_statement->conditions.emplace_back(new Expr());
-			do_expr(*if_statement->conditions.back(), "{");
-			if_statement->blocks.push_back(do_block());
-		} else if (if_tok == Token(Token::SYMBOL, "{")){
-			if_statement->blocks.push_back(do_block());
+			if_statement->else_block.push_back(do_if(if_tok));
+		} else if (if_tok.str == "{"){
+			if_statement->else_block = do_block();
 		} else {
 			throw Exception("Expected 'if' or '{'", if_tok);
 		}
@@ -206,12 +204,12 @@ std::unique_ptr<If> Constructor::do_if(const Token& kw) {
 
 std::unique_ptr<While> Constructor::do_while(const Token& kw) {
 	std::unique_ptr<While> while_statement(new While(kw));
-	while_statement->condition.reset(new Expr());
+	while_statement->expr.reset(new Expr());
 	if (peek().str == "{") {
 		// of no condition, defaults to infinite loop
-		while_statement->condition->push_back(Tok(kw, true));
+		while_statement->expr->push_back(Tok(kw, true));
 	} else {
-		do_expr(*while_statement->condition, "{");
+		do_expr(*while_statement->expr, "{");
 	}
 	while_statement->block = do_block();
 	return while_statement;

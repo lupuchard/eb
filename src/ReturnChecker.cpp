@@ -24,13 +24,9 @@ bool ReturnChecker::check(Block& block) {
 		switch (statement.form) {
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				if_statement.returns = std::vector<bool>(if_statement.blocks.size(), false);
-				bool fully_returns = true;
-				for (size_t j = 0; j < if_statement.blocks.size(); j++) {
-					if_statement.returns[j] = check(if_statement.blocks[j]);
-					fully_returns = fully_returns && if_statement.returns[j];
-				}
-				if (fully_returns && if_statement.blocks.size() > if_statement.conditions.size()) {
+				if_statement.true_returns = check(if_statement.true_block);
+				if_statement.else_returns = check(if_statement.else_block);
+				if (if_statement.true_returns && if_statement.else_returns) {
 					if (i != block.size() - 1) {
 						throw Exception("Unreachable code after if", statement.token);
 					}
@@ -59,14 +55,8 @@ void ReturnChecker::create_implicit_returns(Block& block) {
 		} break;
 		case Statement::IF: {
 			If& if_statement = (If&) statement;
-			if (if_statement.blocks.size() == if_statement.conditions.size()) {
-				throw Exception("Expected return after if", if_statement.token);
-			}
-			for (size_t i = 0; i < if_statement.blocks.size(); i++) {
-				if (!if_statement.returns[i]) {
-					create_implicit_returns(if_statement.blocks[i]);
-				}
-			}
+			if (!if_statement.true_returns) create_implicit_returns(if_statement.true_block);
+			if (!if_statement.else_returns) create_implicit_returns(if_statement.else_block);
 		} break;
 		default: throw Exception("Expected return", statement.token);
 	}
@@ -92,9 +82,8 @@ void ReturnChecker::create_drops(Block* block) {
 		switch (statement.form) {
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				for (Block& if_block : if_statement.blocks) {
-					create_drops(&if_block);
-				}
+				create_drops(&if_statement.true_block);
+				create_drops(&if_statement.else_block);
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
@@ -111,10 +100,6 @@ void ReturnChecker::create_drops(Expr& expr, std::vector<Statement*>& new_statem
 		switch (tok.form) {
 			case Tok::IF: {
 				If& if_statement = *(If*)tok.something;
-				if (if_statement.blocks.size() == if_statement.conditions.size()) {
-					throw Exception("Assigned ifs must have an else", tok.token);
-				}
-
 				std::stringstream ss;
 				ss << "eb$tmp" << index++;
 				Token* t = new Token(Token::IDENT, ss.str(), tok.token.line, tok.token.column);
@@ -122,11 +107,8 @@ void ReturnChecker::create_drops(Expr& expr, std::vector<Statement*>& new_statem
 				Declaration* decl = new Declaration(*t);
 				new_statements.push_back(decl);
 				new_statements.push_back(&if_statement);
-
-				for (size_t j = 0; j < if_statement.blocks.size(); j++) {
-					create_drop(if_statement.blocks[j], if_statement.token, *t);
-				}
-
+				create_drop(if_statement.true_block, if_statement.token, *t);
+				create_drop(if_statement.else_block, if_statement.token, *t);
 				expr[i] = Tok(*t, Tok::VAR);
 			} break;
 			default: break;
@@ -145,12 +127,8 @@ void ReturnChecker::create_drop(Block& block, const Token& token, Token& tmp) {
 		} break;
 		case Statement::IF: {
 			If& if_statement = (If&)statement;
-			if (if_statement.blocks.size() == if_statement.conditions.size()) {
-				throw Exception("Dropping if must have an else", if_statement.token);
-			}
-			for (size_t j = 0; j < if_statement.blocks.size(); j++) {
-				create_drop(if_statement.blocks[j], if_statement.token, tmp);
-			}
+			create_drop(if_statement.true_block, if_statement.token, tmp);
+			create_drop(if_statement.else_block, if_statement.token, tmp);
 		} break;
 		default: break;
 	}

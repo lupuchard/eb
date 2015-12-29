@@ -67,22 +67,19 @@ void TypeChecker::check(Block& block, State& state) {
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				for (size_t j = 0; j < if_statement.conditions.size(); j++) {
-					Type type = type_of(*if_statement.conditions[j], state, if_statement.token);
-					if (!type.has(Prim::BOOL)) {
-						throw Exception("Condition should be Bool, was " + type.to_string(),
-						                if_statement.token);
-					}
-				}
-				for (Block& if_block : if_statement.blocks) {
-					state.descend(if_block);
-					check(if_block, state);
-					state.ascend();
-				}
+				Type type = type_of(*if_statement.expr, state, if_statement.token);
+				if (!type.has(Prim::BOOL)) throw Exception("Condition should be bool, was " +
+				                                           type.to_string(), statement.token);
+				state.descend(if_statement.true_block);
+				check(if_statement.true_block, state);
+				state.ascend();
+				state.descend(if_statement.else_block);
+				check(if_statement.else_block, state);
+				state.ascend();
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				Type type = type_of(*while_statement.condition, state, while_statement.token);
+				Type type = type_of(*while_statement.expr, state, while_statement.token);
 				if (!type.has(Prim::BOOL)) {
 					throw Exception("Condition should be Bool, was " + type.to_string(),
 					                while_statement.token);

@@ -25,14 +25,14 @@ struct Declaration: public Statement {
 
 struct If: public Statement {
 	If(const Token& token): Statement(token, IF) { }
-	std::vector<std::unique_ptr<Expr>> conditions;
-	std::vector<Block> blocks;
-	std::vector<bool> returns;
+	Block true_block;
+	Block else_block;
+	bool true_returns;
+	bool else_returns;
 };
 
 struct While: public Statement {
 	While(const Token& token): Statement(token, WHILE) { }
-	std::unique_ptr<Expr> condition;
 	Block block;
 };
 
