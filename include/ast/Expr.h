@@ -10,6 +10,12 @@ enum class Op {
 	NOT, AND, OR, GT, LT, GEQ, LEQ, EQ, NEQ,
 	TEMP_PAREN, TEMP_FUNC,
 };
+inline bool is_binary(Op op) {
+	switch (op) {
+		case Op::NEG: case Op::INV: case Op::NOT: return false;
+		default: return true;
+	}
+}
 
 struct Tok {
 	enum Form { INT_LIT, FLOAT_LIT, BOOL_LIT, OP, VAR, FUNCTION, IF };

@@ -249,12 +249,6 @@ llvm::Constant* Builder::default_value(const Type& type, llvm::Type* llvm_type) 
 	}
 }
 
-bool is_binary(Op op) {
-	switch (op) {
-		case Op::NEG: case Op::INV: case Op::NOT: return false;
-		default: return true;
-	}
-}
 void Builder::do_op(llvm::IRBuilder<>& builder, Op op, Type& result_type,
                     std::vector<llvm::Value*>& value_stack, std::vector<Type*>& type_stack) {
 	llvm::Value* res;

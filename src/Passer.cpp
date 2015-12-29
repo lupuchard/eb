@@ -2,7 +2,7 @@
 
 void Passer::pass(Module& module, State& state) {
 	// Does the short circuiting.
-	//circuiter.shorten(module);
+	circuiter.shorten(module);
 
 	// Insures all paths return a value and adds implicit returns when necessary.
 	// Transforms assignment ifs.

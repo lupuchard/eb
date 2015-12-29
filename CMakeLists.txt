@@ -12,7 +12,7 @@ add_executable(Ebc "main.cpp" ${SOURCE_FILES}
         include/ast/Token.h include/Tokenizer.h include/ast/Type.h include/passes/TypeChecker.h
         include/Builder.h include/Compiler.h include/ast/Module.h include/Util.h
         include/passes/VarCompleter.h include/passes/LitCompleter.h include/passes/Passer.h
-        include/Exception.h include/passes/ReturnChecker.h include/passes/Circuiter.cpp include/passes/Circuiter.h)
+        include/Exception.h include/passes/ReturnChecker.h src/Circuiter.cpp include/passes/Circuiter.h)
 
 target_link_libraries(Ebc LLVM-3.4)
 

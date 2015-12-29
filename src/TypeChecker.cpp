@@ -171,8 +171,9 @@ Type TypeChecker::type_of(Expr &expr, State& state, const Token& token) {
 }
 
 inline void test_type(Type a, Type b, Type t, const Token& token) {
-	if (!t.is_valid()) throw Exception("Types do not match: " + a.to_string() +
-	                                   " and " + b.to_string(), token);
+	if (!t.is_valid()) {
+		throw Exception("Types do not match: " + a.to_string() + " and " + b.to_string(), token);
+	}
 }
 Type TypeChecker::merge_stack(std::vector<Type*>& stack, int num, Type req_type, const Token& t) {
 	if (stack.size() < num) throw Exception("Misused operator.", t);
