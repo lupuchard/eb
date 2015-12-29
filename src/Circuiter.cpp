@@ -25,7 +25,9 @@ void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
 	std::vector<int> has_side_fx_stack;
 	std::vector<std::vector<Tok*>> stack;
 	std::vector<std::pair<int, int>> range_stack;
-	std::vector<std::pair<std::pair<int, int>, Tok>> new_ifs;
+	//std::vector<std::pair<std::pair<int, int>, Tok>> new_ifs;
+	If* new_if = nullptr;
+	const Token* new_if_token = nullptr;
 	for (size_t j = 0; j < expr->size(); j++) {
 		Tok& tok = expr->at(j);
 		switch (tok.form) {
@@ -47,7 +49,7 @@ void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
 				break;
 			case Tok::OP:
 				if ((tok.op == Op::AND || tok.op == Op::OR) && has_side_fx_stack.back()) {
-					If* new_if = new If(tok.token);
+					new_if = new If(tok.token);
 					Expr* new_expr = new Expr();
 					auto& cond = stack[stack.size() - 2];
 					for (size_t i = 0; i < cond.size(); i++) {
@@ -66,9 +68,8 @@ void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
 					new_if->else_block.emplace_back(new Statement(tok.token, Statement::EXPR));
 					new_if->else_block[0]->expr.reset(new_expr);
 					merge(has_side_fx_stack, stack, range_stack, 2, true, j);
-					Tok new_if_tok(tok.token, Tok::IF);
-					new_if_tok.something = new_if;
-					new_ifs.push_back(std::make_pair(range_stack.back(), new_if_tok));
+					new_if_token = &tok.token;
+					goto end_loop;
 					// a || b  -->  if  a { true  } else { b }
 					// a && b  -->  if !a { false } else { b }
 				} else if (is_binary(tok.op)) {
@@ -81,7 +82,20 @@ void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
 				break;
 		}
 	}
-	if (new_ifs.empty()) return;
+	end_loop:
+	if (new_if == nullptr) return;
+	std::unique_ptr<Expr> new_expr(new Expr());
+	for (size_t i = 0; i < expr->size(); i++) {
+		if (i == range_stack.back().first) {
+			Tok tok(*new_if_token, Tok::IF);
+			tok.something = (void*)new_if;
+			new_expr->push_back(tok);
+			i = (size_t)range_stack.back().second - 1;
+		} else {
+			new_expr->push_back((*expr)[i]);
+		}
+	}
+	/*if (new_ifs.empty()) return;
 	std::unique_ptr<Expr> new_expr(new Expr());
 	int j = 0;
 	for (size_t i = 0; i < expr->size(); i++) {
@@ -89,17 +103,18 @@ void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
 			if (i >= new_ifs[j].first.first) {
 				new_expr->push_back(new_ifs[j].second);
 				if (j + 1 < new_ifs.size()) {
-					i = (size_t)std::min(new_ifs[j].first.second, new_ifs[j + 1].first.first);
+					i = (size_t)std::min(new_ifs[j].first.second - 2, new_ifs[j + 1].first.first);
 				} else {
-					i = (size_t)new_ifs[j].first.second;
+					i = (size_t)new_ifs[j].first.second - 2;
 				}
 				j++;
 			}
 		} else {
 			new_expr->push_back((*expr)[i]);
 		}
-	}
+	}*/
 	expr.swap(new_expr);
+	shorten(expr);
 }
 
 void Circuiter::merge(std::vector<int>& side_fx_stack, std::vector<std::vector<Tok*>>& stack,

@@ -2,11 +2,11 @@
 #define EBC_SCOPE_H
 
 #include "ast/Module.h"
+#include "Variable.h"
 #include <unordered_map>
 #include <map>
 
 namespace llvm {
-	class Value;
 	class Function;
 	class BasicBlock;
 }
@@ -14,14 +14,6 @@ namespace llvm {
 struct Loop {
 	llvm::BasicBlock* start = nullptr;
 	llvm::BasicBlock* end   = nullptr;
-};
-
-struct Variable {
-	Variable() { }
-	Variable(Type type): type(type) { }
-	Type type = Type::invalid();
-	llvm::Value* llvm = nullptr;
-	bool is_param = false;
 };
 
 class Scope {
@@ -52,12 +44,13 @@ public:
 	void descend(Block& block);
 	void ascend();
 
+	bool declare(Global& global);
 	Variable& declare(std::string name, Type type);
 	Variable* get_var(const std::string& name) const;
 	Variable& next_var(const std::string& name);
 
 	// returns true if function already exists
-	bool declare(std::string name, Function& func);
+	bool declare(Function& func);
 	const std::vector<Function*>& get_functions(int num_parameters, const std::string& name) const;
 	void set_func_llvm(const Function& func, llvm::Function& llvm_func);
 	llvm::Function* get_func_llvm(const Function& func);
@@ -73,6 +66,9 @@ private:
 	std::map<std::pair<std::string, int>, std::vector<Function*>> functions;
 	std::unordered_map<const Function*, llvm::Function*> llvm_functions;
 	Type return_type;
+
+	std::unordered_map<std::string, Variable*> globals;
+
 	Scope root_scope;
 	Scope* current_scope;
 };

@@ -73,19 +73,29 @@ void State::ascend() {
 	current_scope = current_scope->get_parent();
 }
 
-
+bool State::declare(Global& global) {
+	if (globals.count(global.token.str)) return true;
+	globals[global.token.str] = &global.var;
+	return false;
+}
 Variable& State::declare(std::string name, Type type) {
 	return current_scope->declare(name, type);
 }
 Variable* State::get_var(const std::string& name) const {
-	return current_scope->get(name);
+	auto var = current_scope->get(name);
+	if (var == nullptr) {
+		auto iter = globals.find(name);
+		if (iter == globals.end()) return nullptr;
+		return iter->second;
+	}
+	return var;
 }
 Variable& State::next_var(const std::string& name) {
 	return current_scope->next(name);
 }
 
-bool State::declare(std::string name, Function& func) {
-	auto key = std::make_pair(name, func.param_names.size());
+bool State::declare(Function& func) {
+	auto key = std::make_pair(func.token.str, func.param_names.size());
 	auto iter = functions.find(key);
 	if (iter == functions.end()) {
 		std::vector<Function*> vec;

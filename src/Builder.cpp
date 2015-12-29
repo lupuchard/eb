@@ -62,7 +62,7 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				}
 
 				std::stringstream ss;
-				ss << func.name_token.str << "." << func.param_types.size() << "." << func.index;
+				ss << func.token.str << "." << func.param_types.size() << "." << func.index;
 				std::string name = ss.str();
 				name = name == "main.0.0" ? "eb$main" : name;
 				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(name,
@@ -80,6 +80,15 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				do_block(builder, func.block, state);
 
 				state.ascend();
+			} break;
+			case Item::GLOBAL: {
+				Global& global = (Global&)item;
+				llvm::Type* type = type_to_llvm(global.var.type);
+				llvm::GlobalVariable* llvm_global = llvm::cast<llvm::GlobalVariable>(
+						llvm_module.getOrInsertGlobal(global.token.str, type)
+				);
+				llvm_global->setInitializer(default_value(global.var.type, type));
+				global.var.llvm = llvm_global;
 			} break;
 		}
 	}
@@ -226,7 +235,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				}
 				value_stack.push_back(builder.CreateCall(
 						state.get_func_llvm(func),
-						llvm::ArrayRef<llvm::Value*>(args), func.name_token.str
+						llvm::ArrayRef<llvm::Value*>(args), func.token.str
 				));
 				type_stack.push_back(&func.return_type);
 			} break;

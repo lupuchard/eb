@@ -67,4 +67,5 @@ TEST_CASE("full tests", "[full]") {
 	test("test/test_code/functional.eb", 0);
 	test("test/test_code/overloading.eb", 0);
 	test("test/test_code/fib.eb", 0);
+	test("test/test_code/short.eb", 0);
 }

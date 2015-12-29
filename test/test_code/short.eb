@@ -1,0 +1,30 @@
+
+global: I32
+
+fn set_global(val: I32): Bool {
+	global = val
+	return true
+}
+
+fn is_false(): Bool { false }
+
+fn main(): I32 {
+	global = 0
+
+	if !(true || set_global(1)) { return 1 }
+	if global == 1 { return 2 }
+
+	if !(true && set_global(1)) { return 3 }
+	if global != 1 { return 4 }
+
+	if !(is_false() || set_global(2)) { return 5 }
+	if global != 2 { return 6 }
+
+	if   is_false() && set_global(3)  { return 7 }
+	if global == 3 { return 8 }
+
+	if true && (is_false() && set_global(4)) { return 9 }
+	if global == 4 { return 10 }
+
+	return 0
+}

@@ -21,14 +21,16 @@ Module Constructor::do_module() {
 }
 
 std::unique_ptr<Item> Constructor::do_item() {
-	const Token& token = next();
+	const Token& token = peek();
 	switch (token.form) {
 		case Token::KW_FN: return do_function();
-		default: throw Exception("Expected 'fn'.", token);
+		case Token::IDENT: return do_global();
+		default: throw Exception("Expected 'fn' or ident", token);
 	}
 }
 
 std::unique_ptr<Function> Constructor::do_function() {
+	next();
 	const Token& name_token = expect_ident();
 	std::unique_ptr<Function> function(new Function(name_token));
 	expect("(");
@@ -63,6 +65,13 @@ std::unique_ptr<Function> Constructor::do_function() {
 	if (colon_token->str != "{") throw Exception("Expected ':' or '{'", *colon_token);
 	function->block = do_block();
 	return std::move(function);
+}
+
+std::unique_ptr<Global> Constructor::do_global() {
+	const Token& name = next();
+	expect(":");
+	const Token& type_token = expect_ident();
+	return std::unique_ptr<Global>(new Global(name, Type::parse(type_token.str)));
 }
 
 Block Constructor::do_block() {

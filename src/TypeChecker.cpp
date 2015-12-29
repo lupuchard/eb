@@ -9,8 +9,8 @@ void TypeChecker::check(Module& module, State& state) {
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
-				bool exists = state.declare(func.name_token.str, func);
-				if (exists) throw Exception("Duplicate function definition", func.name_token);
+				bool exists = state.declare(func);
+				if (exists) throw Exception("Duplicate function definition", func.token);
 				state.descend(func.block);
 				state.set_return(func.return_type);
 				for (size_t j = 0; j < func.param_names.size(); j++) {
@@ -18,6 +18,11 @@ void TypeChecker::check(Module& module, State& state) {
 				}
 				check(func.block, state);
 				state.ascend();
+			} break;
+			case Item::GLOBAL: {
+				Global& global = (Global&)item;
+				bool exists = state.declare(global);
+				if (exists) throw Exception("Global with same name already exists", global.token);
 			} break;
 		}
 	}

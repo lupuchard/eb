@@ -13,6 +13,7 @@ private:
 	Module                       do_module();
 	std::unique_ptr<Item>        do_item();
 	std::unique_ptr<Function>    do_function();
+	std::unique_ptr<Global>      do_global();
 	Block                        do_block();
 	std::unique_ptr<Statement>   do_statement();
 	std::unique_ptr<Declaration> do_declare(const Token& ident);

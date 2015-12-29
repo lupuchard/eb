@@ -38,8 +38,8 @@ fn main(): I32 {
 
 // IMPROVEMENTS
 //   anywhere blocks
-//   short circuiting
 // NEXT
+//   globals
 //   namespaces
 //   modules/imports
 //   external c
