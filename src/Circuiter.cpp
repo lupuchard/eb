@@ -8,6 +8,7 @@ void Circuiter::shorten(Module& module) {
 				Function& func = (Function&)item;
 				shorten(func.block);
 			} break;
+			default: break;
 		}
 	}
 }
@@ -15,112 +16,92 @@ void Circuiter::shorten(Module& module) {
 void Circuiter::shorten(Block& block) {
 	for (size_t i = 0; i < block.size(); i++) {
 		Statement& statement = *block[i];
-		if (statement.expr != nullptr) {
-			shorten(statement.expr);
-		}
+		shorten(statement.expr);
 	}
 }
 
-void Circuiter::shorten(std::unique_ptr<Expr>& expr) {
+void Circuiter::shorten(Expr& expr) {
 	std::vector<int> has_side_fx_stack;
-	std::vector<std::vector<Tok*>> stack;
+	std::vector<std::vector<std::unique_ptr<Tok>*>> stack;
 	std::vector<std::pair<int, int>> range_stack;
-	//std::vector<std::pair<std::pair<int, int>, Tok>> new_ifs;
 	If* new_if = nullptr;
 	const Token* new_if_token = nullptr;
-	for (size_t j = 0; j < expr->size(); j++) {
-		Tok& tok = expr->at(j);
+	for (size_t j = 0; j < expr.size(); j++) {
+		Tok& tok = *expr[j];
 		switch (tok.form) {
-			case Tok::BOOL_LIT: case Tok::INT_LIT: case Tok::FLOAT_LIT: case Tok::VAR:
+			case Tok::INT: case Tok::FLOAT: case Tok::VAR:
 				has_side_fx_stack.push_back(false);
-				stack.push_back(std::vector<Tok*>(1, &tok));
+				stack.push_back(std::vector<std::unique_ptr<Tok>*>(1, &expr[j]));
 				range_stack.push_back(std::make_pair(j, j + 1));
 				break;
 			case Tok::IF: {
 				has_side_fx_stack.push_back(true);
-				stack.push_back(std::vector<Tok*>(1, &tok));
+				stack.push_back(std::vector<std::unique_ptr<Tok>*>(1, &expr[j]));
 				range_stack.push_back(std::make_pair(j, j + 1));
-				If& if_statement = *(If*) tok.something;
-				shorten(if_statement.expr);
+				shorten(((IfTok&)tok).if_statement->expr);
 			} break;
-			case Tok::FUNCTION:
-				merge(has_side_fx_stack, stack, range_stack, (int)tok.i, true, j);
-				stack.back().push_back(&tok);
+			case Tok::FUNC:
+				merge(has_side_fx_stack, stack, range_stack, ((FuncTok&)tok).num_params, true, j);
+				stack.back().push_back(&expr[j]);
 				break;
-			case Tok::OP:
-				if ((tok.op == Op::AND || tok.op == Op::OR) && has_side_fx_stack.back()) {
-					new_if = new If(tok.token);
-					Expr* new_expr = new Expr();
-					auto& cond = stack[stack.size() - 2];
-					for (size_t i = 0; i < cond.size(); i++) {
-						new_expr->push_back(*cond[i]);
-					}
-					if (tok.op == Op::AND) new_expr->push_back(Tok(tok.token, Op::NOT));
-					new_if->expr.reset(new_expr);
-					new_if->true_block.emplace_back(new Statement(tok.token, Statement::EXPR));
-					new_if->true_block[0]->expr.reset(new Expr());
-					new_if->true_block[0]->expr->push_back(Tok(tok.token, tok.op == Op::OR));
-					new_expr = new Expr();
-					auto& else_expr = stack[stack.size() - 1];
-					for (size_t i = 0; i < else_expr.size(); i++) {
-						new_expr->push_back(*else_expr[i]);
-					}
-					new_if->else_block.emplace_back(new Statement(tok.token, Statement::EXPR));
-					new_if->else_block[0]->expr.reset(new_expr);
-					merge(has_side_fx_stack, stack, range_stack, 2, true, j);
-					new_if_token = &tok.token;
-					goto end_loop;
+			case Tok::OP: {
+				Op op = ((OpTok&)tok).op;
+				if ((op == Op::AND || op == Op::OR) && has_side_fx_stack.back()) {
 					// a || b  -->  if  a { true  } else { b }
 					// a && b  -->  if !a { false } else { b }
-				} else if (is_binary(tok.op)) {
+					new_if = new If(*tok.token);
+					auto& cond = stack[stack.size() - 2];
+					for (size_t i = 0; i < cond.size(); i++) {
+						new_if->expr.emplace_back();
+						new_if->expr.back().swap(*cond[i]);
+					}
+					if (op == Op::AND) new_if->expr.emplace_back(new OpTok(*tok.token, Op::NOT));
+					new_if->true_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
+					new_if->true_block[0]->expr.emplace_back(new IntTok(*tok.token, op == Op::OR));
+					auto& else_expr = stack[stack.size() - 1];
+					new_if->else_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
+					for (size_t i = 0; i < else_expr.size(); i++) {
+						new_if->else_block[0]->expr.emplace_back();
+						new_if->else_block[0]->expr.back().swap(*else_expr[i]);
+					}
+					merge(has_side_fx_stack, stack, range_stack, 2, true, j);
+					new_if_token = tok.token;
+					goto end_loop;
+				} else if (is_binary(op)) {
 					merge(has_side_fx_stack, stack, range_stack, 2, false, j);
-					stack.back().push_back(&tok);
+					stack.back().push_back(&expr[j]);
 				} else {
 					merge(has_side_fx_stack, stack, range_stack, 1, false, j);
-					stack.back().push_back(&tok);
+					stack.back().push_back(&expr[j]);
 				}
-				break;
+			} break;
 		}
 	}
 	end_loop:
 	if (new_if == nullptr) return;
-	std::unique_ptr<Expr> new_expr(new Expr());
-	for (size_t i = 0; i < expr->size(); i++) {
+	Expr copy;
+	copy.resize(expr.size());
+	for (size_t i = 0; i < copy.size(); i++) {
+		copy[i].swap(expr[i]);
+	}
+	expr.clear();
+	for (size_t i = 0; i < copy.size(); i++) {
 		if (i == range_stack.back().first) {
-			Tok tok(*new_if_token, Tok::IF);
-			tok.something = (void*)new_if;
-			new_expr->push_back(tok);
+			IfTok* tok = new IfTok(*new_if_token);
+			tok->if_statement.reset(new_if);
+			expr.emplace_back(std::unique_ptr<IfTok>(tok));
 			i = (size_t)range_stack.back().second - 1;
 		} else {
-			new_expr->push_back((*expr)[i]);
+			expr.push_back(std::move(copy[i]));
 		}
 	}
-	/*if (new_ifs.empty()) return;
-	std::unique_ptr<Expr> new_expr(new Expr());
-	int j = 0;
-	for (size_t i = 0; i < expr->size(); i++) {
-		if (j < new_ifs.size()) {
-			if (i >= new_ifs[j].first.first) {
-				new_expr->push_back(new_ifs[j].second);
-				if (j + 1 < new_ifs.size()) {
-					i = (size_t)std::min(new_ifs[j].first.second - 2, new_ifs[j + 1].first.first);
-				} else {
-					i = (size_t)new_ifs[j].first.second - 2;
-				}
-				j++;
-			}
-		} else {
-			new_expr->push_back((*expr)[i]);
-		}
-	}*/
-	expr.swap(new_expr);
 	shorten(expr);
 }
 
-void Circuiter::merge(std::vector<int>& side_fx_stack, std::vector<std::vector<Tok*>>& stack,
+void Circuiter::merge(std::vector<int>& side_fx_stack, std::vector<std::vector<std::unique_ptr<Tok>*>>& stack,
                       std::vector<std::pair<int, int>>& range_stack, int num, bool side_fx,
                       size_t j) {
-	std::vector<Tok*> vec;
+	std::vector<std::unique_ptr<Tok>*> vec;
 	std::pair<int, int> range(j, j + 1);
 	for (int i = num; i >= 1; i--) {
 		auto& to_add = stack[stack.size() - i];

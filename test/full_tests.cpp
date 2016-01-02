@@ -1,5 +1,5 @@
 #include "Tokenizer.h"
-#include "Constructor.h"
+#include "Parser.h"
 #include "passes/Passer.h"
 #include "Builder.h"
 #include "Exception.h"
@@ -27,12 +27,12 @@ void test(const std::string& filename, int expected_result) {
 	buffer << file.rdbuf();
 
 	Tokenizer tokenizer(buffer.str());
-	Constructor constructor;
+	Parser constructor;
 	Module module;
 	try {
 		module = constructor.construct(tokenizer.get_tokens());
 	} catch (Exception e) {
-		FAIL("Constructor failed for '" << filename << "': " << e.what());
+		FAIL("Parser failed for '" << filename << "': " << e.what());
 	}
 	Passer passer;
 	State state;

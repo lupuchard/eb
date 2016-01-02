@@ -1,6 +1,5 @@
 #include "passes/TypeChecker.h"
 #include "Exception.h"
-#include <cassert>
 #include <iostream>
 
 void TypeChecker::check(Module& module, State& state) {
@@ -14,7 +13,7 @@ void TypeChecker::check(Module& module, State& state) {
 				state.descend(func.block);
 				state.set_return(func.return_type);
 				for (size_t j = 0; j < func.param_names.size(); j++) {
-					state.declare(func.param_names[j]->str, func.param_types[j]).is_param = true;
+					state.declare(func.param_names[j]->str(), func.param_types[j]).is_param = true;
 				}
 				check(func.block, state);
 				state.ascend();
@@ -36,16 +35,16 @@ void TypeChecker::check(Block& block, State& state) {
 				Declaration& decl = (Declaration&)statement;
 				Type type;
 				if (decl.type_token != nullptr) {
-					type = Type::parse(decl.type_token->str);
+					type = Type::parse(decl.type_token->str());
 				}
-				if (decl.expr.get() != nullptr) {
-					type = type.merge(type_of(*decl.expr, state, decl.token));
+				if (!decl.expr.empty()) {
+					type = type.merge(type_of(decl.expr, state, decl.token));
 				}
-				state.declare(decl.token.str, type);
+				state.declare(decl.token.str(), type);
 			} break;
 			case Statement::ASSIGNMENT: {
-				Type type = type_of(*statement.expr, state, statement.token);
-				Variable* var = state.get_var(statement.token.str);
+				Type type = type_of(statement.expr, state, statement.token);
+				Variable* var = state.get_var(statement.token.str());
 				if (var == nullptr) {
 					throw Exception("No variable of this name found", statement.token);
 				} else if (var->is_param) {
@@ -59,11 +58,11 @@ void TypeChecker::check(Block& block, State& state) {
 				var->type = t;
 			} break;
 			case Statement::EXPR: {
-				type_of(*statement.expr, state, statement.token);
+				type_of(statement.expr, state, statement.token);
 			} break;
 			case Statement::RETURN: {
 				if (state.get_return().get() == Prim::VOID) break;
-				Type type = type_of(*statement.expr, state, statement.token);
+				Type type = type_of(statement.expr, state, statement.token);
 				Type t = state.get_return().merge(type);
 				if (!t.is_valid()) {
 					throw Exception("Cannot return " + type.to_string() + "from func returning " +
@@ -72,7 +71,7 @@ void TypeChecker::check(Block& block, State& state) {
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				Type type = type_of(*if_statement.expr, state, if_statement.token);
+				Type type = type_of(if_statement.expr, state, if_statement.token);
 				if (!type.has(Prim::BOOL)) throw Exception("Condition should be bool, was " +
 				                                           type.to_string(), statement.token);
 				state.descend(if_statement.true_block);
@@ -84,7 +83,7 @@ void TypeChecker::check(Block& block, State& state) {
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				Type type = type_of(*while_statement.expr, state, while_statement.token);
+				Type type = type_of(while_statement.expr, state, while_statement.token);
 				if (!type.has(Prim::BOOL)) {
 					throw Exception("Condition should be Bool, was " + type.to_string(),
 					                while_statement.token);
@@ -109,60 +108,61 @@ void TypeChecker::check(Block& block, State& state) {
 Type TypeChecker::type_of(Expr &expr, State& state, const Token& token) {
 	static Type unknown;
 	std::vector<Type*> stack;
-	for (Tok& tok : expr) {
+	for (size_t j = 0; j < expr.size(); j++) {
+		Tok& tok = *expr[j];
 		if (tok.form == Tok::VAR) {
-			Variable* var = state.get_var(tok.token.str);
-			if (var == nullptr) throw Exception("Variable not found", tok.token);
+			Variable* var = state.get_var(tok.token->str());
+			if (var == nullptr) throw Exception("Variable not found", *tok.token);
 			stack.push_back(&var->type);
-		} else if (tok.form == Tok::FUNCTION) {
-			auto& funcs = state.get_functions((int)tok.i, tok.token.str);
-			if (funcs.empty()) throw Exception("Function not found", tok.token);
-			std::vector<Type> possible(tok.i, Type::invalid());
+		} else if (tok.form == Tok::FUNC) {
+			int num_params = ((FuncTok&)tok).num_params;
+			auto& funcs = state.get_functions(num_params, tok.token->str());
+			if (funcs.empty()) throw Exception("Function not found", *tok.token);
+			std::vector<Type> possible((size_t)num_params, Type::invalid());
 			std::vector<Function*> valid_funcs;
 
-			std::vector<Type*> arguments(stack.end() - tok.i, stack.end());
-			stack.erase(stack.end() - tok.i, stack.end());
+			std::vector<Type*> arguments(stack.end() - num_params, stack.end());
+			stack.erase(stack.end() - num_params, stack.end());
 
 			for (Function* func : funcs) {
 				if (func->allows(arguments)) {
-					for (size_t i = 0; i < tok.i; i++) {
+					for (size_t i = 0; i < num_params; i++) {
 						possible[i].add(func->param_types[i].get());
 					}
 					valid_funcs.push_back(func);
 				}
 			}
-			if (valid_funcs.empty()) throw Exception("Arguments match no function", tok.token);
-			for (size_t i = 0; i < tok.i; i++) {
+			if (valid_funcs.empty()) throw Exception("Arguments match no function", *tok.token);
+			for (size_t i = 0; i < num_params; i++) {
 				*arguments[i] = arguments[i]->merge(possible[i]);
 			}
 			stack.push_back(valid_funcs.size() == 1 ? &valid_funcs[0]->return_type : &unknown);
-
 		} else if (tok.form == Tok::OP) {
-			switch (tok.op) {
+			switch (((OpTok&)tok).op) {
 				case Op::ADD: case Op::SUB: case Op::MUL: case Op::DIV: case Op::MOD:
 				case Op::BAND: case Op::BOR: case Op::XOR: case Op::LSH: case Op::RSH:
-					tok.type = merge_stack(stack, 2, tok.type, tok.token);
+					tok.type = merge_stack(stack, 2, tok.type, *tok.token);
 					break;
 				case Op::AND: case Op::OR:
-					merge_stack(stack, 2, Type(Prim::BOOL), tok.token);
+					merge_stack(stack, 2, Type(Prim::BOOL), *tok.token);
 					break;
 				case Op::GT: case Op::LT: case Op::GEQ: case Op::LEQ:
-					merge_stack(stack, 2, NUMBER, tok.token);
+					merge_stack(stack, 2, NUMBER, *tok.token);
 					break;
 				case Op::EQ: case Op::NEQ:
-					merge_stack(stack, 2, Type(), tok.token);
+					merge_stack(stack, 2, Type(), *tok.token);
 					break;
 				case Op::NOT:
-					merge_stack(stack, 1, Type(Prim::BOOL), tok.token);
+					merge_stack(stack, 1, Type(Prim::BOOL), *tok.token);
 					break;
 				case Op::NEG:
-					tok.type = merge_stack(stack, 1, tok.type, tok.token);
+					tok.type = merge_stack(stack, 1, tok.type, *tok.token);
 					if (!tok.type.merge(UNSIGNED).is_valid()) {
-						throw Exception("Expected unsigned type", tok.token);
+						throw Exception("Expected unsigned type", *tok.token);
 					}
 					break;
 				case Op::INV:
-					tok.type = merge_stack(stack, 1, tok.type, tok.token);
+					tok.type = merge_stack(stack, 1, tok.type, *tok.token);
 					break;
 				case Op::TEMP_PAREN: case Op::TEMP_FUNC: assert(false);
 			}

@@ -74,8 +74,8 @@ void State::ascend() {
 }
 
 bool State::declare(Global& global) {
-	if (globals.count(global.token.str)) return true;
-	globals[global.token.str] = &global.var;
+	if (globals.count(global.token.str())) return true;
+	globals[global.token.str()] = &global.var;
 	return false;
 }
 Variable& State::declare(std::string name, Type type) {
@@ -95,7 +95,7 @@ Variable& State::next_var(const std::string& name) {
 }
 
 bool State::declare(Function& func) {
-	auto key = std::make_pair(func.token.str, func.param_names.size());
+	auto key = std::make_pair(func.token.str(), func.param_names.size());
 	auto iter = functions.find(key);
 	if (iter == functions.end()) {
 		std::vector<Function*> vec;

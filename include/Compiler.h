@@ -2,19 +2,30 @@
 #define EBC_COMPILER_H
 
 #include "Tokenizer.h"
-#include "Constructor.h"
+#include "Parser.h"
 #include "Builder.h"
 #include <string>
+#include <fstream>
+#include <atomic>
 
 class Compiler {
 public:
-
-	void compile(const std::string& code, const std::string& out_file);
-	void gen_ll(const std::string& code, const std::string& out);
+	Compiler(const std::string& filename);
+	void initialize(const std::string& filename);
 
 private:
-	Constructor constructor;
-	Builder     builder;
+	struct File {
+		std::ifstream stream;
+		Module module;
+		std::unique_ptr<Tokenizer> tokens;
+		std::map<std::string, std::string> imports;
+	};
+	void compile(File& file);
+
+	std::map<std::string, File> files;
+
+	//shared
+	std::atomic_int num_threads;
 };
 
 

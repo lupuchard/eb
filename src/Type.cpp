@@ -20,9 +20,6 @@ void Type::add(Prim prim) {
 	if (iter != possible.end()) possible.erase(iter);
 	possible.insert(prim);
 }
-void Type::add(const std::set<Prim>& prims) {
-	possible.insert(prims.begin(), prims.end());
-}
 void Type::complete() {
 	if (possible.count(Prim::F64) && merge(FLOAT).possible.size() == possible.size()) {
 		possible = {Prim::F64};

@@ -1,44 +1,49 @@
-#include <iostream>
 #include "Compiler.h"
+#include <iostream>
+#include <thread>
 
-/*bool file_exists(const std::string& name) {
-	if (FILE* file = fopen(name.c_str(), "r")) {
-		fclose(file);
-		return true;
-	}
-	return false;
-}*/
+Compiler::Compiler(const std::string& filename) {
+	initialize(filename);
 
-/*std::string exec(const char* cmd) {
-	std::shared_ptr<FILE> pipe(popen(cmd, "r"), pclose);
-	if (!pipe) return "ERROR";
-	char buffer[128];
-	std::string result = "";
-	while (!feof(pipe.get())) {
-		if (fgets(buffer, 128, pipe.get()) != NULL) {
-			result += buffer;
+	std::vector<std::thread> threads;
+	threads.resize(files.size());
+	size_t i = 0;
+	num_threads.store(0);
+	for (auto& file : files) {
+		while (num_threads.load() >= 4) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
+		threads[i] = std::thread([&] { compile(file.second); });//&Compiler::compile, &*this, file.second);
+		num_threads.fetch_add(1);
 	}
-	return result;
-}*/
-
-void Compiler::compile(const std::string& code, const std::string& out_file) {
-	gen_ll(code, out_file);
-	/*if (!file_exists("shim.a")) {
-		system("clang -c shim.c");
-		system("ar rcs shim.a shim.o");
-	}*/
-	//std::cout << exec(("llc " + out_file + ".ll").c_str());
-	//std::cout << exec(("clang -o " + out_file + " " + out_file + ".s shim.a").c_str());
-	//std::cout << system(("./" + out_file).c_str()) << std::endl;
+	for (auto& thread : threads) {
+		thread.join();
+	}
 }
 
-void Compiler::gen_ll(const std::string& code, const std::string& out_file) {
-	/*Tokenizer tokenizer(code);
-	auto tokens = tokenizer.get_tokens();
-	Module mod = constructor.construct(tokens);
-	State scope;
-	checker.check_types(mod, scope);
-	checker.complete_types(mod, scope);
-	builder.build(mod, scope, out_file + ".ll");*/
+void Compiler::initialize(const std::string& filename) {
+	std::string module_name = filename; // TODO: remove extension, assert is valid identifier
+	File& file = files[module_name];
+	file.stream.open(filename);
+	file.tokens.reset(new Tokenizer(file.stream));
+	auto& traits = file.tokens->get_traits();
+	for (auto& trait : traits) {
+		switch (trait.first) {
+			case Trait::INCLUDE: initialize(trait.second); break;
+		}
+	}
+}
+
+void Compiler::compile(File& file) {
+	Parser parser;
+	file.module = parser.construct(file.tokens->get_tokens());
+
+
+
+	// when module identifier is found: possible locations
+	// 1. check locally
+	// 2. check among imports
+	// 3. check among linked libraries
+	// 4. check among other directories in compilation
+	// 5. check among other files in compilation
 }

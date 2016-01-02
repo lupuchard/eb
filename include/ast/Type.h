@@ -18,7 +18,6 @@ public:
 	static Type invalid();
 
 	void add(Prim prim);
-	void add(const std::set<Prim>& prims);
 	void complete();
 
 	Type merge(const Type& other) const;

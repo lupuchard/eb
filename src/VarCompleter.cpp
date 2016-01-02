@@ -9,6 +9,7 @@ void VarCompleter::complete(Module& module, State& state) {
 				Function& func = (Function&)item;
 				complete(func.block, state);
 			} break;
+			default: break;
 		}
 	}
 }
@@ -20,7 +21,7 @@ void VarCompleter::complete(Block& block, State& state) {
 		switch (statement.form) {
 			case Statement::DECLARATION: {
 				Declaration& declaration = (Declaration&)statement;
-				Variable& var = state.next_var(declaration.token.str);
+				Variable& var = state.next_var(declaration.token.str());
 				var.type.complete();
 				if (!var.type.is_known()) {
 					throw Exception("Type could not be determined.", declaration.token);

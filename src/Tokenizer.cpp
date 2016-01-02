@@ -3,16 +3,27 @@
 //
 
 #include "Tokenizer.h"
-#include <unordered_map>
-#include <algorithm>
 #include <iostream>
 
 Tokenizer::Tokenizer(const std::string& str): str(str) {
 	do_whitespace();
-	interpret_raw();
+	this->str.clear();
 }
+
+Tokenizer::Tokenizer(std::ifstream& file) {
+	std::stringstream buffer;
+	buffer << file.rdbuf();
+	str = std::move(buffer.str());
+	do_whitespace();
+	str.clear();
+	file.close();
+}
+
 const std::vector<Token>& Tokenizer::get_tokens() const {
 	return tokens;
+}
+const std::vector<std::pair<Trait, std::string>>& Tokenizer::get_traits() const {
+	return traits;
 }
 
 // toss that worthless whitespace
@@ -40,45 +51,50 @@ void Tokenizer::do_whitespace() {
 // start with _ or letter, continue as _'s, letters's and number's (non-ascii also allowed)
 void Tokenizer::do_word() {
 	std::string word;
-	word += str[index++];
-	column++;
+	word += str[index];
 	while (true) {
-		char c = str[index];
+		column++;
+		char c = str[++index];
 		if (isalnum(c) || c == '_' || !isascii(c)) {
 			word += c;
 		} else {
-			tokens.push_back(Token(Token::IDENT, word, line, column));
+			auto iter = KEYWORDS.find(word);
+			if (iter != KEYWORDS.end()) {
+				tokens.push_back(Token(iter->second, word, line, column));
+			} else if (connecting) {
+				tokens.back().add_str(word);
+				connecting = false;
+			} else {
+				tokens.push_back(Token(Token::IDENT, word, line, column));
+			}
 			if (isspace(c)) {
 				return do_whitespace();
 			} else {
 				return do_symbol();
 			}
 		}
-		index++;
-		column++;
 	}
 }
 
 void Tokenizer::do_number() {
 	std::string number;
-	number += str[index++];
+	number += str[index];
 	bool prev_e = false;
-	column++;
 	while (true) {
-		char c = str[index];
+		column++;
+		char c = str[++index];
 		if (isdigit(c) || isalpha(c) || c == '_' || c == '.' || (prev_e && c == '-')) {
 			prev_e = (c == 'e' || c == 'E');
 			number += c;
 		} else {
 			tokens.push_back(Token(Token::FLOAT, number, line, column));
+			parse_num(tokens.back());
 			if (isspace(c)) {
-				return do_whitespace();
+ 				return do_whitespace();
 			} else {
 				return do_symbol();
 			}
 		}
-		index++;
-		column++;
 	}
 }
 
@@ -111,12 +127,35 @@ void Tokenizer::do_symbol() {
 		return do_whitespace();
 	} else if (isalpha(c) || c == '_' || !isascii(c)) {
 		return do_word();
+	} else if (c == '.' && tokens.back().form == Token::IDENT) {
+		char d = str[++index];
+		if (isalpha(d) || d == '_' || !isascii(d)) {
+			connecting = true;
+			do_word();
+		} else {
+			add_symbol(str.substr(index - 1, 1));
+		}
 	} else if (isdigit(c) || (c == '.' && isdigit(str[index + 1]))) {
 		return do_number();
 	} else if (c == ';') {
 		tokens.push_back(Token(Token::END, ";", line, column));
 		column++;
 		index++;
+	} else if (c == '#') {
+		column++;
+		index++;
+		size_t j;
+		for (j = 0; !isspace(str[index + j]); j++);
+		std::string key = str.substr(index, j);
+		auto iter = TRAITS.find(key);
+		if (iter == TRAITS.end()) {
+			throw Exception("'" + key + "' is not a valid trait", BLANK_TOKEN);
+		}
+		for (index += j; isspace(str[index]); index++);
+		for (j = 0; !isspace(str[index + j]); j++);
+		traits.push_back(std::make_pair(iter->second, str.substr(index, j)));
+		index += j;
+		return do_whitespace();
 	} else if ((c == '!' || c == '>' || c == '<' || c == '=') && str[index + 1] == '=') {
 		add_symbol(str.substr(index, 2));
 		column += 2;
@@ -136,66 +175,30 @@ void Tokenizer::add_symbol(std::string s) {
 	tokens.push_back(Token(Token::SYMBOL, s, line, column));
 }
 
-void Tokenizer::interpret_raw() {
-	bool prev_special = false;
-	static std::unordered_map<std::string, Token::Form> keywords = {
-		{"true", Token::KW_TRUE}, {"false", Token::KW_FALSE},
-		{"fn", Token::KW_FN}, {"return", Token::KW_RETURN},
-		{"if", Token::KW_IF}, {"else", Token::KW_ELSE},
-		{"while", Token::KW_WHILE}, {"continue", Token::KW_CONTINUE}, {"break", Token::KW_BREAK}
-	};
-	for (Token& token : tokens) {
-		if (token.column > 0) token.column--;
-		switch (token.form) {
-			case Token::IDENT: {
-				if (prev_special) {
-					token.form = Token::SPECIAL;
-				} else {
-					auto iter = keywords.find(token.str);
-					if (iter != keywords.end()) {
-						token.form = iter->second;
-					}
-				}
-			} break;
-			case Token::FLOAT: {
-				parse_num(token);
-			} break;
-			case Token::SYMBOL: {
-				char c = token.str[0];
-				if (c == '@') {
-					prev_special = true;
-					continue;
-				}
-			} break;
-			default: break;
-		}
-		prev_special = false;
-	}
-}
-
 
 void Tokenizer::parse_num(Token& token) {
-	if (token.str == ".") {
+	if (token.str() == ".") {
 		token.form = Token::SYMBOL;
 		return;
 	}
-	std::transform(token.str.begin(), token.str.end(), token.str.begin(), ::tolower);
-	if (token.str.size() >= 2 && token.str[1] == 'x') {
-		parse_int(token);
-	} else if (token.str.find('e') != std::string::npos ||
-		       token.str.find('.') != std::string::npos) {
-		parse_float(token);
+	std::string str;
+	std::transform(token.str().begin(), token.str().end(), str.begin(), ::tolower);
+	if (token.str().size() >= 2 && token.str()[1] == 'x') {
+		parse_int(token, str);
+	} else if (token.str().find('e') != std::string::npos ||
+		       token.str().find('.') != std::string::npos) {
+		parse_float(token, str);
 	} else {
-		parse_int(token);
+		parse_int(token, str);
 	}
 }
 
-void Tokenizer::parse_float(Token& token) {
+void Tokenizer::parse_float(Token& token, const std::string& str) {
 
 	// parse type
-	size_t end_pos = token.str.find('f');
+	size_t end_pos = token.str().find('f');
 	if (end_pos != std::string::npos) {
-		std::string end = token.str.substr(end_pos);
+		std::string end = token.str().substr(end_pos);
 		if      (end == "f32") token.type.add(Prim::F32);
 		else if (end == "f64") token.type.add(Prim::F64);
 		else if (end != "f") throw Exception("Invalid fp suffix", token);
@@ -203,13 +206,13 @@ void Tokenizer::parse_float(Token& token) {
 	if (!token.type.is_valid()) token.type = FLOAT;
 
 	// parse value
-	std::string body = token.str.substr(0, end_pos);
+	std::string body = token.str().substr(0, end_pos);
 	if (body == "0in") {
-		token.f = std::numeric_limits<double>::infinity();
+		token.set_flt(std::numeric_limits<double>::infinity());
 		return;
 	}
 	try {
-		token.f = std::stod(token.str);
+		token.set_flt(std::stod(token.str()));
 	} catch (std::invalid_argument ex) {
 		throw Exception("Invalid float.", token);
 	} catch (std::out_of_range ex) {
@@ -217,16 +220,16 @@ void Tokenizer::parse_float(Token& token) {
 	}
 }
 
-void Tokenizer::parse_int(Token& token) {
+void Tokenizer::parse_int(Token& token, const std::string& str) {
 
 	// parse base
 	int base = 10;
 	size_t offset = 0;
 	bool explicit_base = false;
-	if (token.str.size() >= 2) {
+	if (token.str().size() >= 2) {
 		offset = 2;
 		explicit_base = true;
-		switch (token.str[1]) {
+		switch (token.str()[1]) {
 			case 'b': base = 2;  break;
 			case 'q': base = 4;  break;
 			case 'o': base = 8;  break;
@@ -238,14 +241,14 @@ void Tokenizer::parse_int(Token& token) {
 		}
 	}
 
-	if (!explicit_base && token.str.find('f') != std::string::npos) {
-		return parse_float(token);
+	if (!explicit_base && token.str().find('f') != std::string::npos) {
+		return parse_float(token, str);
 	}
 
 	// parse type
-	size_t end_pos = token.str.find('i');
+	size_t end_pos = token.str().find('i');
 	if (end_pos != std::string::npos) {
-		std::string end = token.str.substr(end_pos);
+		std::string end = token.str().substr(end_pos);
 		if      (end == "i8")  token.type.add(Prim::I8);
 		else if (end == "i16") token.type.add(Prim::I16);
 		else if (end == "i32") token.type.add(Prim::I32);
@@ -253,9 +256,9 @@ void Tokenizer::parse_int(Token& token) {
 		else if (end != "i") throw Exception("Invalid integral suffix", token);
 		else token.type = SIGNED;
 	} else {
-		end_pos = token.str.find('u');
+		end_pos = token.str().find('u');
 		if (end_pos != std::string::npos) {
-			std::string end = token.str.substr(end_pos);
+			std::string end = token.str().substr(end_pos);
 			if      (end == "u8")  token.type.add(Prim::U8);
 			else if (end == "u16") token.type.add(Prim::U16);
 			else if (end == "u32") token.type.add(Prim::U32);
@@ -266,24 +269,13 @@ void Tokenizer::parse_int(Token& token) {
 	}
 
 	// parse value
-	std::string body = token.str.substr(offset, end_pos);
+	std::string body = token.str().substr(offset, end_pos);
+	token.form = Token::INT;
 	try {
-		token.i = std::stoull(body, 0, base);
+		token.set_int(std::stoull(body, 0, base));
 	} catch (std::invalid_argument ex) {
 		throw Exception("Invalid integer.", token);
 	} catch (std::out_of_range ex) {
 		throw Exception("Out of integer range.", token);
 	}
-
-	token.form = Token::INT;
-}
-
-Tokenizer::Exception::Exception(std::string desc, Token token):
-		std::invalid_argument(desc), desc(desc), token(token) {
-	std::stringstream ss;
-	ss << "line " << token.line << " (" << token.str << "): " << desc;
-	this->desc = ss.str();
-}
-const char* Tokenizer::Exception::what() const throw() {
-	return desc.c_str();
 }

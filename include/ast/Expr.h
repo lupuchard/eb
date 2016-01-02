@@ -2,7 +2,9 @@
 #define EBC_EXPR_H
 
 #include "Token.h"
+#include "Variable.h"
 #include <vector>
+#include <memory>
 
 enum class Op {
 	ADD, SUB, MUL, DIV, MOD, NEG, INV,
@@ -18,41 +20,39 @@ inline bool is_binary(Op op) {
 }
 
 struct Tok {
-	enum Form { INT_LIT, FLOAT_LIT, BOOL_LIT, OP, VAR, FUNCTION, IF };
+	enum Form { INT, FLOAT, OP, VAR, FUNC, IF };
 
-	Tok(const Token& token, Form form, Type type = Type()):
-			token(token), form(form), type(type) { }
-	Tok(const Token& token, Op op, Type type = Type()):
-			token(token), form(OP), op(op), type(type) { }
-	Tok(const Token& token, uint64_t i, Type type):
-			form(INT_LIT), token(token), i(i), type(type) { }
-	Tok(const Token& token, double f,   Type type):
-			form(FLOAT_LIT), token(token), f(f), type(type) { }
-	Tok(const Token& token, bool b):
-			form(BOOL_LIT), token(token), b(b), type(Prim::BOOL) { }
+	Tok(const Token& token, Form form, Type type = Type()) :
+			token(&token), form(form), type(type) { }
 
-	// c++ is garbage
-	inline Tok& operator=(const Tok& rhs) {
-		if (this != &rhs) {
-			this->~Tok();
-			new (this) Tok(rhs);
-		}
-		return *this;
-	}
+	virtual void _() const { }
 
-	const Token& token;
-	Type type;
-
+	const Token* token;
 	Form form;
-	union {
-		uint64_t i;
-		double f;
-		bool b;
-		Op op;
-		void* something;
-	};
+	Type type;
 };
 
-typedef std::vector<Tok> Expr;
+struct IntTok: public Tok {
+	IntTok(const Token& token, uint64_t i, Type type): Tok(token, INT, type), i(i) { }
+	IntTok(const Token& token, bool b): Tok(token, INT, Type(Prim::BOOL)), i((uint64_t)b) { }
+	uint64_t i;
+};
+
+struct FloatTok: public Tok {
+	FloatTok(const Token& token, double f, Type type): Tok(token, FLOAT, type), f(f) { }
+	double f;
+};
+
+struct OpTok: public Tok {
+	OpTok(const Token& token, Op op, Type type = Type()): Tok(token, OP, type), op(op) { }
+	Op op;
+};
+
+struct VarTok: public Tok {
+	VarTok(const Token& token): Tok(token, VAR) { }
+	Variable* var = nullptr;
+};
+
+typedef std::vector<std::unique_ptr<Tok>> Expr;
 
 #endif //EBC_EXPR_H

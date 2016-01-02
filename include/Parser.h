@@ -5,7 +5,7 @@
 #include <memory>
 #include <ast/Expr.h>
 
-class Constructor {
+class Parser {
 public:
 	Module construct(const std::vector<Token>& tokens);
 

@@ -1,6 +1,5 @@
 #include "passes/LitCompleter.h"
 #include "Exception.h"
-#include <cassert>
 
 void LitCompleter::complete(Module& module, State& state) {
 	for (size_t i = 0; i < module.size(); i++) {
@@ -10,6 +9,7 @@ void LitCompleter::complete(Module& module, State& state) {
 				Function& func = (Function&)item;
 				complete(func.block, state);
 			} break;
+			default: break;
 		}
 	}
 }
@@ -21,29 +21,29 @@ void LitCompleter::complete(Block& block, State& state) {
 		switch (statement.form) {
 			case Statement::DECLARATION: {
 				Declaration& declaration = (Declaration&)statement;
-				Type type = state.next_var(declaration.token.str).type;
-				if (declaration.expr != nullptr) complete(*declaration.expr, state, type);
+				Type type = state.next_var(declaration.token.str()).type;
+				if (!declaration.expr.empty()) complete(declaration.expr, state, type);
 			} break;
 			case Statement::ASSIGNMENT: {
-				Type type = state.get_var(statement.token.str)->type;
-				complete(*statement.expr, state, type);
+				Type type = state.get_var(statement.token.str())->type;
+				complete(statement.expr, state, type);
 			} break;
 			case Statement::EXPR: {
-				complete(*statement.expr, state, Type());
+				complete(statement.expr, state, Type());
 			} break;
 			case Statement::RETURN: {
 				Type type = state.get_return();
-				if (type.get() != Prim::VOID) complete(*statement.expr, state, type);
+				if (type.get() != Prim::VOID) complete(statement.expr, state, type);
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				complete(*if_statement.expr, state, Type(Prim::BOOL));
+				complete(if_statement.expr, state, Type(Prim::BOOL));
 				complete(if_statement.true_block, state);
 				complete(if_statement.else_block, state);
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				complete(*while_statement.expr, state, Type(Prim::BOOL));
+				complete(while_statement.expr, state, Type(Prim::BOOL));
 				complete(while_statement.block, state);
 			} break;
 			default: break;
@@ -59,23 +59,26 @@ void LitCompleter::complete(Expr& expr, State& state, Type final_type) {
 	// all the referenced types are completed as well
 	std::vector<std::vector<Type*>> ref_stack;
 
-	for (Tok& tok : expr) {
+	for (size_t j = 0; j < expr.size(); j++) {
+		Tok& tok = *expr[j];
 		switch (tok.form) {
 			case Tok::VAR: {
-				Type var_type = state.get_var(tok.token.str)->type;
+				Type var_type = state.get_var(tok.token->str())->type;
 				assert(var_type.is_known());
 				type_stack.push_back(var_type);
 				ref_stack.emplace_back();
 			} break;
-			case Tok::FUNCTION: {
-				auto& funcs = state.get_functions((int)tok.i, tok.token.str);
-				if (funcs.empty()) throw Exception("Function not found", tok.token);
+			case Tok::FUNC: {
+				FuncTok& func_tok = (FuncTok&)tok;
+				auto& funcs = state.get_functions(func_tok.num_params, tok.token->str());
+				if (funcs.empty()) throw Exception("Function not found", *tok.token);
 				std::vector<Function*> valid_funcs;
 
-				std::vector<Type>                 args(type_stack.end() - tok.i, type_stack.end());
-				std::vector<std::vector<Type*>> ref_args(ref_stack.end() - tok.i, ref_stack.end());
-				type_stack.erase(type_stack.end() - tok.i, type_stack.end());
-				ref_stack.erase(  ref_stack.end() - tok.i,  ref_stack.end());
+				std::vector<Type> args(type_stack.end() - func_tok.num_params, type_stack.end());
+				std::vector<std::vector<Type*>> ref_args(ref_stack.end() - func_tok.num_params,
+				                                         ref_stack.end());
+				type_stack.erase(type_stack.end() - func_tok.num_params, type_stack.end());
+				ref_stack.erase(  ref_stack.end() - func_tok.num_params,  ref_stack.end());
 
 				for (Function* func : funcs) {
 					if (func->allows(args)) {
@@ -83,20 +86,20 @@ void LitCompleter::complete(Expr& expr, State& state, Type final_type) {
 					}
 				}
 				assert(!valid_funcs.empty());
-				if (valid_funcs.size() > 2) throw Exception("Couldn't resolve func", tok.token);
-				for (size_t i = 0; i < tok.i; i++) {
+				if (valid_funcs.size() > 2) throw Exception("Couldn't resolve func", *tok.token);
+				for (size_t i = 0; i < func_tok.num_params; i++) {
 					if (!args[i].is_known()) {
 						for (Type* type : ref_args[i]) {
 							*type = valid_funcs[0]->param_types[i];
 						}
 					}
 				}
-				tok.something = valid_funcs[0];
+				func_tok.func = valid_funcs[0];
 				type_stack.push_back(valid_funcs[0]->return_type);
 				ref_stack.emplace_back();
 			} break;
 			case Tok::OP: {
-				switch (tok.op) {
+				switch (((OpTok&)tok).op) {
 					case Op::ADD: case Op::SUB: case Op::MUL: case Op::DIV: case Op::MOD:
 					case Op::AND: case Op::OR: case Op::BAND: case Op::BOR: case Op::XOR:
 					case Op::LSH: case Op::RSH: {

@@ -7,13 +7,6 @@
 #include <fstream>
 #include <iostream>
 
-std::string Builder::build(Module& module, State& state) {
-	std::string out;
-	llvm::raw_string_ostream stream(out);
-	build(module, state, stream);
-	return stream.str();
-}
-
 void Builder::build(Module& module, State& state, const std::string& out_file) {
 	std::ofstream file;
 	file.open(out_file);
@@ -62,7 +55,7 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				}
 
 				std::stringstream ss;
-				ss << func.token.str << "." << func.param_types.size() << "." << func.index;
+				ss << func.token.str() << "." << func.param_types.size() << "." << func.index;
 				std::string name = ss.str();
 				name = name == "main.0.0" ? "eb$main" : name;
 				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(name,
@@ -73,7 +66,7 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				state.descend(func.block);
 				auto iter = llvm_func->arg_begin();
 				for (size_t j = 0; j < func.param_types.size(); j++) {
-					state.get_var(func.param_names[j]->str)->llvm = &*iter++;
+					state.get_var(func.param_names[j]->str())->llvm = &*iter++;
 				}
 				llvm::IRBuilder<> builder(create_basic_block("entry"));
 
@@ -85,7 +78,7 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				Global& global = (Global&)item;
 				llvm::Type* type = type_to_llvm(global.var.type);
 				llvm::GlobalVariable* llvm_global = llvm::cast<llvm::GlobalVariable>(
-						llvm_module.getOrInsertGlobal(global.token.str, type)
+						llvm_module.getOrInsertGlobal(global.token.str(), type)
 				);
 				llvm_global->setInitializer(default_value(global.var.type, type));
 				global.var.llvm = llvm_global;
@@ -113,36 +106,36 @@ llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, S
 	switch (statement.form) {
 		case Statement::DECLARATION: {
 			Declaration& decl = (Declaration&)statement;
-			Variable& var = state.next_var(decl.token.str);
+			Variable& var = state.next_var(decl.token.str());
 			auto llvm_type = type_to_llvm(var.type);
-			auto llvm_val = b.CreateAlloca(llvm_type, nullptr, decl.token.str);
+			auto llvm_val = b.CreateAlloca(llvm_type, nullptr, decl.token.str());
 			var.llvm = llvm_val;
 			llvm::Value* assigned;
-			if (decl.expr == nullptr) {
+			if (decl.expr.empty()) {
 				// TODO: require all variables be initialized before used, so no defaults
 				assigned = default_value(var.type, llvm_type);
 			} else {
-				assigned = do_expr(b, *decl.expr, state);
+				assigned = do_expr(b, decl.expr, state);
 			}
 			if (assigned != nullptr) {
 				b.CreateStore(assigned, llvm_val);
 			}
 		} break;
 		case Statement::ASSIGNMENT: {
-			llvm::Value* assigned = do_expr(b, *statement.expr, state);
-			b.CreateStore(assigned, state.get_var(statement.token.str)->llvm);
+			llvm::Value* assigned = do_expr(b, statement.expr, state);
+			b.CreateStore(assigned, state.get_var(statement.token.str())->llvm);
 		} break;
 		case Statement::EXPR: {
-			drop = do_expr(b, *statement.expr, state);
+			drop = do_expr(b, statement.expr, state);
 		} break;
 		case Statement::RETURN: {
-			llvm::Value* returned = do_expr(b, *statement.expr, state);
+			llvm::Value* returned = do_expr(b, statement.expr, state);
 			b.CreateRet(returned);
 		} break;
 		case Statement::IF: {
 			If& if_statement = (If&)statement;
 			bool exits = false;
-			llvm::Value* cond = do_expr(b, *if_statement.expr, state);
+			llvm::Value* cond = do_expr(b, if_statement.expr, state);
 			llvm::BasicBlock* if_true  = create_basic_block("if");
 			llvm::BasicBlock* if_false = create_basic_block("else");
 			llvm::BasicBlock* end      = create_basic_block("end");
@@ -171,7 +164,7 @@ llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, S
 			llvm::BasicBlock* end     = create_basic_block("end");
 			b.CreateBr(start);
 			b.SetInsertPoint(start);
-			llvm::Value* cond = do_expr(b, *while_statement.expr, state);
+			llvm::Value* cond = do_expr(b, while_statement.expr, state);
 			b.CreateCondBr(cond, if_true, end);
 			b.SetInsertPoint(if_true);
 			state.descend(while_statement.block);
@@ -197,35 +190,34 @@ llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, S
 llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& state) {
 	std::vector<llvm::Value*> value_stack;
 	std::vector<Type*> type_stack;
-	for (Tok& tok : expr) {
+	for (size_t j = 0; j < expr.size(); j++) {
+		Tok& tok = *expr[j];
 		switch (tok.form) {
-			case Tok::INT_LIT:
+			case Tok::INT: {
+				auto i = ((IntTok&)tok).i;
 				if (FLOAT.has(tok.type.get())) {
-					value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), tok.i));
+					value_stack.push_back(llvm::ConstantFP::get( type_to_llvm(tok.type), i));
 				} else {
-					value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), tok.i));
+					value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), i));
 				}
 				type_stack.push_back(&tok.type);
-				break;
-			case Tok::FLOAT_LIT:
-				value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), tok.f));
+			} break;
+			case Tok::FLOAT: {
+				double f = ((FloatTok&)tok).f;
+				value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), f));
 				type_stack.push_back(&tok.type);
-				break;
-			case Tok::BOOL_LIT:
-				value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), tok.i));
-				type_stack.push_back(&tok.type);
-				break;
+			} break;
 			case Tok::VAR: {
-				Variable& var = *state.get_var(tok.token.str);
+				Variable& var = *state.get_var(tok.token->str());
 				if (var.is_param) {
 					value_stack.push_back(var.llvm);
 				} else {
-					value_stack.push_back(builder.CreateLoad(var.llvm, tok.token.str.c_str()));
+					value_stack.push_back(builder.CreateLoad(var.llvm, tok.token->str().c_str()));
 				}
 				type_stack.push_back(&var.type);
 			} break;
-			case Tok::FUNCTION: {
-				Function& func = *(Function*)tok.something;
+			case Tok::FUNC: {
+				Function& func = *((FuncTok&)tok).func;
 				std::vector<llvm::Value*> args;
 				args.resize(func.param_types.size());
 				for (int i = (int)func.param_types.size() - 1; i >= 0; i--) {
@@ -235,12 +227,12 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				}
 				value_stack.push_back(builder.CreateCall(
 						state.get_func_llvm(func),
-						llvm::ArrayRef<llvm::Value*>(args), func.token.str
+						llvm::ArrayRef<llvm::Value*>(args), func.token.str()
 				));
 				type_stack.push_back(&func.return_type);
 			} break;
 			case Tok::OP:
-				do_op(builder, tok.op, tok.type, value_stack, type_stack);
+				do_op(builder, ((OpTok&)tok).op, tok.type, value_stack, type_stack);
 				break;
 			default: assert(false);
 		}

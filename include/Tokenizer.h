@@ -1,21 +1,21 @@
-#include "ast/Token.h"
-#include <vector>
-#include <stdexcept>
-
 #ifndef EBC_TOKENIZER_H
 #define EBC_TOKENIZER_H
+
+#include "ast/Token.h"
+#include "Exception.h"
+#include <vector>
+#include <stdexcept>
+#include <fstream>
+#include <unordered_map>
+
+enum class Trait { INCLUDE };
 
 class Tokenizer {
 public:
 	Tokenizer(const std::string& str);
+	Tokenizer(std::ifstream& file);
 	const std::vector<Token>& get_tokens() const;
-
-	struct Exception: std::invalid_argument {
-		Exception(std::string desc, Token token);
-		virtual const char* what() const throw();
-		std::string desc;
-		Token token;
-	};
+	const std::vector<std::pair<Trait, std::string>>& get_traits() const;
 
 private:
 	void do_whitespace();
@@ -23,16 +23,29 @@ private:
 	void do_number();
 	void do_symbol();
 	void add_symbol(std::string s);
-	void interpret_raw();
-	void parse_num(Token& token);
-	void parse_float(Token& token);
-	void parse_int(Token& token);
+	void parse_num(  Token& token);
+	void parse_float(Token& token, const std::string&);
+	void parse_int(  Token& token, const std::string&);
 
 	std::string str;
 	size_t index = 0;
+
 	std::vector<Token> tokens;
+	std::vector<std::pair<Trait, std::string>> traits;
+	bool connecting = false;
 	int line = 1;
 	int column = 1;
+
+	const std::unordered_map<std::string, Token::Form> KEYWORDS = {
+			{"true", Token::KW_TRUE}, {"false", Token::KW_FALSE},
+			{"pub", Token::KW_PUB}, {"fn", Token::KW_FN}, {"return", Token::KW_RETURN},
+			{"if", Token::KW_IF}, {"else", Token::KW_ELSE},
+			{"while", Token::KW_WHILE}, {"continue", Token::KW_CONTINUE}, {"break", Token::KW_BREAK}
+	};
+	const std::unordered_map<std::string, Trait> TRAITS = {
+			{"include", Trait::INCLUDE}
+	};
+	const Token BLANK_TOKEN;
 };
 
 #endif //EBC_TOKENIZER_H

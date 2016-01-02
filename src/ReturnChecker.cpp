@@ -14,6 +14,7 @@ void ReturnChecker::check(Module& module) {
 					}
 				}
 			} break;
+			case Item::GLOBAL: break;
 		}
 	}
 }
@@ -66,9 +67,9 @@ void ReturnChecker::create_drops(Block* block) {
 	Block new_block;
 	for (size_t i = 0; i < block->size(); i++) {
 		Statement& statement = *block->at(i);
-		if (statement.expr != nullptr) {
+		if (!statement.expr.empty()) {
 			std::vector<Statement*> new_statements;
-			create_drops(*statement.expr, new_statements);
+			create_drops(statement.expr, new_statements);
 			for (Statement* new_statement : new_statements) {
 				new_block.push_back(std::unique_ptr<Statement>(new_statement));
 			}
@@ -96,20 +97,20 @@ void ReturnChecker::create_drops(Block* block) {
 
 void ReturnChecker::create_drops(Expr& expr, std::vector<Statement*>& new_statements) {
 	for (size_t i = 0; i < expr.size(); i++) {
-		Tok& tok = expr[i];
+		Tok& tok = *expr[i];
 		switch (tok.form) {
 			case Tok::IF: {
-				If& if_statement = *(If*)tok.something;
+				If& if_statement = *((IfTok&)tok).if_statement;
 				std::stringstream ss;
 				ss << "eb$tmp" << index++;
-				Token* t = new Token(Token::IDENT, ss.str(), tok.token.line, tok.token.column);
+				Token* t = new Token(Token::IDENT, ss.str(), tok.token->line, tok.token->column);
 				phantom_tokens.emplace_back(std::unique_ptr<Token>(t));
 				Declaration* decl = new Declaration(*t);
 				new_statements.push_back(decl);
 				new_statements.push_back(&if_statement);
 				create_drop(if_statement.true_block, if_statement.token, *t);
 				create_drop(if_statement.else_block, if_statement.token, *t);
-				expr[i] = Tok(*t, Tok::VAR);
+				expr[i].reset(new VarTok(*t));
 			} break;
 			default: break;
 		}

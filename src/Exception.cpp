@@ -3,7 +3,8 @@
 Exception::Exception(std::string desc, Token token):
 		std::invalid_argument(desc), desc(desc), token(token) {
 	std::stringstream ss;
-	ss << "line " << token.line << ", column " << token.column << " (" << token.str << "): " << desc;
+	ss << "line " << token.line << ", column " << token.column;
+	ss << " (" << token.str() << "): " << desc;
 	this->desc = ss.str();
 }
 

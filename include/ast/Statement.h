@@ -8,7 +8,7 @@ struct Statement {
 	enum Form { DECLARATION, ASSIGNMENT, EXPR, RETURN, IF, WHILE, CONTINUE, BREAK };
 	Form form;
 	const Token& token;
-	std::unique_ptr<Expr> expr;
+	Expr expr;
 	Statement(const Token& token, Form form): token(token), form(form) { }
 	virtual void _() const { } // MOST USEFUL METHOD DOES ALL THINGS
 };
@@ -29,6 +29,10 @@ struct If: public Statement {
 	Block else_block;
 	bool true_returns;
 	bool else_returns;
+};
+struct IfTok: public Tok {
+	IfTok(const Token& token): Tok(token, IF) { }
+	std::unique_ptr<If> if_statement;
 };
 
 struct While: public Statement {

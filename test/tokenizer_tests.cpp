@@ -14,17 +14,18 @@ TEST_CASE("Tokenize math", "[tokenizer]") {
 	Tokenizer tokenizer("x = (2 + y) / 64f32;\nz += y.pow(3);");
 	auto& tokens = tokenizer.get_tokens();
 
-	REQUIRE(tokens.size() == 21);
+	REQUIRE(tokens.size() == 19);
 	REQUIRE(tokens[0] == Token(Token::Form::IDENT, "x"));
 	REQUIRE(tokens[1] == Token(Token::Form::SYMBOL, "="));
 
 	REQUIRE(tokens[3] == Token(Token::Form::INT, "2"));
-	REQUIRE(tokens[3].i == 2);
+	REQUIRE(tokens[3].i() == 2);
 	REQUIRE(tokens[8] == Token(Token::Form::FLOAT, "64f32"));
-	REQUIRE(tokens[8].f == 64);
+	REQUIRE(tokens[8].f() == 64);
 
 	REQUIRE(tokens[12] == Token(Token::Form::SYMBOL, "+"));
-	REQUIRE(tokens[16] == Token(Token::Form::IDENT, "pow"));
+	REQUIRE(tokens[14].ident().size() == 2);
+	REQUIRE(tokens[14].ident()[1] == "pow");
 }
 
 TEST_CASE("Tokenize with comments", "[tokenizer]") {
@@ -48,6 +49,6 @@ TEST_CASE("Tokenize numbers", "[tokenizer]") {
 	REQUIRE(tokens[6].type == FLOAT);
 	REQUIRE(tokens[7].type.get() == Prim::I8);
 	REQUIRE(tokens[8].form == Token::INT);
-	REQUIRE(tokens[8].i == 3);
-	REQUIRE(tokens[9].i == 17);
+	REQUIRE(tokens[8].i() == 3);
+	REQUIRE(tokens[9].i() == 17);
 }

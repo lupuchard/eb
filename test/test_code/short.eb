@@ -28,3 +28,8 @@ fn main(): I32 {
 
 	return 0
 }
+
+/*
+name resolving phase
+
+*/

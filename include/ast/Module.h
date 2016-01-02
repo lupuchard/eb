@@ -8,6 +8,7 @@ struct Item {
 	enum Form { FUNCTION, GLOBAL };
 	Item(Form form): form(form) { }
 	Form form;
+	bool pub = false;
 	virtual void _() const { }
 };
 
@@ -43,6 +44,11 @@ struct Function: public Item {
 	int index = 0;
 	std::vector<Type> param_types;
 	std::vector<const Token*> param_names;
+};
+struct FuncTok: public Tok {
+	FuncTok(const Token& token, int num_params): Tok(token, FUNC), num_params(num_params) { }
+	int num_params;
+	Function* func = nullptr;
 };
 
 typedef std::vector<std::unique_ptr<Item>> Module;

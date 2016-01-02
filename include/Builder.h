@@ -8,7 +8,6 @@
 
 class Builder {
 public:
-	std::string build(Module& module, State& state);
 	void build(Module& module, State& state, const std::string& out_file);
 	void build(Module& module, State& state, llvm::raw_ostream& stream);
 
