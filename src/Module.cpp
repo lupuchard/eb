@@ -1,6 +1,7 @@
 #include "ast/Module.h"
 
 bool Module::declare(Function& func) {
+	if (func.pub) pub_functions.push_back(&func);
 	auto key = std::make_pair(func.token.str(), func.param_names.size());
 	auto iter = functions.find(key);
 	if (iter == functions.end()) {
@@ -27,6 +28,9 @@ const std::vector<Function*>& Module::get_functions(int num_params, const std::s
 	}
 	return iter->second;
 }
+const std::vector<Function*>& Module::get_pub_functions() const {
+	return pub_functions;
+}
 
 bool Module::declare(Global& global) {
 	if (globals.count(global.token.str())) return true;
@@ -37,6 +41,9 @@ Global* Module::get_global(const std::string& name) {
 	auto iter = globals.find(name);
 	if (iter == globals.end()) return nullptr;
 	return iter->second;
+}
+const std::vector<Global*>& Module::get_pub_globals() const {
+	return pub_globals;
 }
 
 void Module::push_back(std::unique_ptr<Item> item) {

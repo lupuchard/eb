@@ -38,9 +38,9 @@ fn main(): I32 {
 
 // IMPROVEMENTS
 //   anywhere blocks
+//   conditional compilation
+//   submodules
+//   recompile deps if interface changes
 // NEXT
-//   globals
-//   namespaces
-//   modules/imports
 //   external c
 //   structs

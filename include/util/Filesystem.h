@@ -7,6 +7,9 @@
 
 std::string concat_paths(const std::string& dir, const std::string& path2);
 
+bool file_exists(const std::string& filename);
+long last_modified(const std::string& filename);
+
 std::string get_file_stem(const std::string& filename);
 std::string get_extension(const std::string& filename);
 

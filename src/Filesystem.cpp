@@ -20,6 +20,27 @@ std::string concat_paths(const std::string& dir, const std::string& path2) {
 	return dir + path2.substr(1);
 }
 
+bool file_exists(const std::string& filename) {
+#if _WIN32
+	auto dwattrib = GetFileAttributes(filename.c_str());
+	return (dwAttrib != INVALID_FILE_ATTRIBUTES && !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
+#else
+	return access(filename.c_str(), F_OK) != -1;
+#endif
+}
+long last_modified(const std::string& filename) {
+	if (!file_exists(filename)) return 0;
+#if _WIN32
+	long time;
+	GetFileTime(CreateFile(filename.c_str()), nullptr, &time, nullptr);
+	return time;
+#else
+	struct stat st;
+	stat(filename.c_str(), &st);
+	return st.st_mtim.tv_sec;
+#endif
+}
+
 std::pair<int, int> get_dash_and_dot(const std::string& filename) {
 	int dash = (int)filename.find_last_of(FILE_SEPARATOR);
 	if (dash == filename.size() - 1) {

@@ -92,6 +92,7 @@ std::unique_ptr<Function> Parser::do_function() {
 		if (param_token->str() == ",") param_token = &next();
 		else if (param_token->str() != ")") throw Exception("Expected ',' or ')'", *param_token);
 	}
+	assert(function->param_types.size() < 256);
 
 	// return type
 	const Token* colon_token = &next();

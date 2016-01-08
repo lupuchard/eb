@@ -13,14 +13,6 @@ void test(const std::string& filename, int expected_result) {
 	REQUIRE(exec("../../out") == expected_result);
 }
 
-bool file_exists(const std::string& name) {
-	if (FILE* file = fopen(name.c_str(), "r")) {
-		fclose(file);
-		return true;
-	}
-	return false;
-}
-
 TEST_CASE("full tests", "[full]") {
 	bool success = change_directory("test/test_code");
 	REQUIRE(success);

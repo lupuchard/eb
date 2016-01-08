@@ -13,7 +13,7 @@ namespace llvm { class Module; }
 class Compiler {
 public:
 	Compiler(const std::string& filename, std::string out_build = "", std::string out_exec = "");
-	void initialize(const std::string& filename);
+	void initialize(const std::string& filename, bool force_recompile = false);
 
 private:
 	struct File {
@@ -23,18 +23,25 @@ private:
 		std::unique_ptr<Tokenizer> tokens;
 		Module module;
 		std::string out_filename;
+		std::vector<std::string> includes;
 	};
 	void compile(File& file);
 	void resolve(Module& module, State& state);
 	void resolve(Module& module, const Block& block, State& state);
 	void resolve(Module& module, const Expr& expr,   State& state);
 	Module& import(Module& module, const std::vector<std::string>& name, const Token& token);
+	void create_obj_file(File& file);
+	void load_obj_file(File& file);
 
 	std::vector<std::unique_ptr<File>> files;
 	Tree<File> file_tree;
 
 	std::string out_build;
 	std::string out_exec;
+
+	std::vector<Token> extra_tokens;
+	std::vector<std::unique_ptr<Function>> extra_functions;
+	std::vector<std::unique_ptr<Global>> extra_globals;
 };
 
 

@@ -20,7 +20,6 @@ void Builder::build(Module& module, State& state, const std::string& out_file) {
 		}
 		auto llvm_args = llvm::ArrayRef<llvm::Type*>(args);
 		llvm::FunctionType* llvm_func = llvm::FunctionType::get(result, llvm_args, false);
-		//llvm_functions[func] = llvm_module.getOrInsertGlobal(func->token.str(), llvm_func);
 		llvm_functions[func] = llvm_module.getOrInsertFunction(func->unique_name, llvm_func);
 	}
 	for (auto global : module.external_globals) {
