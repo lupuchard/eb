@@ -3,7 +3,7 @@
 
 void ReturnChecker::check(Module& module) {
 	for (size_t i = 0; i < module.size(); i++) {
-		Item& item = *module[i];
+		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
@@ -14,7 +14,7 @@ void ReturnChecker::check(Module& module) {
 					}
 				}
 			} break;
-			case Item::GLOBAL: break;
+			default: break;
 		}
 	}
 }
@@ -79,18 +79,8 @@ void ReturnChecker::create_drops(Block* block) {
 	}
 	*block = std::move(new_block);
 	for (size_t i = 0; i < block->size(); i++) {
-		Statement& statement = *block->at(i);
-		switch (statement.form) {
-			case Statement::IF: {
-				If& if_statement = (If&)statement;
-				create_drops(&if_statement.true_block);
-				create_drops(&if_statement.else_block);
-			} break;
-			case Statement::WHILE: {
-				While& while_statement = (While&)statement;
-				create_drops(&while_statement.block);
-			} break;
-			default: break;
+		for (Block* inner_block : block->at(i)->blocks()) {
+			create_drops(inner_block);
 		}
 	}
 }

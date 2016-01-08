@@ -1,6 +1,6 @@
 #include "ast/Type.h"
 #include <unordered_map>
-#include <iostream>
+#include <algorithm>
 
 Type::Type() {
 	possible.insert(Prim::UNKNOWN);
@@ -66,6 +66,9 @@ bool Type::is_known() const {
 }
 bool Type::is_valid() const {
 	return !possible.empty();
+}
+size_t Type::size() const {
+	return possible.size();
 }
 Prim Type::get() const {
 	if (possible.size() > 1) return Prim::UNKNOWN;

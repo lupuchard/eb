@@ -4,28 +4,37 @@
 #include "Tokenizer.h"
 #include "Parser.h"
 #include "Builder.h"
-#include <string>
+#include "Tree.h"
 #include <fstream>
 #include <atomic>
 
+namespace llvm { class Module; }
+
 class Compiler {
 public:
-	Compiler(const std::string& filename);
+	Compiler(const std::string& filename, std::string out_build = "", std::string out_exec = "");
 	void initialize(const std::string& filename);
 
 private:
 	struct File {
+		enum State { READY, IN_PROGRESS, FINISHED };
+		State state = READY;
 		std::ifstream stream;
-		Module module;
 		std::unique_ptr<Tokenizer> tokens;
-		std::map<std::string, std::string> imports;
+		Module module;
+		std::string out_filename;
 	};
 	void compile(File& file);
+	void resolve(Module& module, State& state);
+	void resolve(Module& module, const Block& block, State& state);
+	void resolve(Module& module, const Expr& expr,   State& state);
+	Module& import(Module& module, const std::vector<std::string>& name, const Token& token);
 
-	std::map<std::string, File> files;
+	std::vector<std::unique_ptr<File>> files;
+	Tree<File> file_tree;
 
-	//shared
-	std::atomic_int num_threads;
+	std::string out_build;
+	std::string out_exec;
 };
 
 

@@ -7,7 +7,6 @@
 #include <map>
 
 namespace llvm {
-	class Function;
 	class BasicBlock;
 }
 
@@ -39,36 +38,26 @@ private:
 
 class State {
 public:
-	State();
+	State(Module& module);
+
+	Module& get_module();
 
 	void descend(Block& block);
 	void ascend();
 
-	bool declare(Global& global);
 	Variable& declare(std::string name, Type type);
 	Variable* get_var(const std::string& name) const;
 	Variable& next_var(const std::string& name);
 
-	// returns true if function already exists
-	bool declare(Function& func);
-	const std::vector<Function*>& get_functions(int num_parameters, const std::string& name) const;
-	void set_func_llvm(const Function& func, llvm::Function& llvm_func);
-	llvm::Function* get_func_llvm(const Function& func);
-
-	void set_return(Type type);
-	Type get_return() const;
+	void set_func(Function& func);
+	Function& get_func() const;
 
 	Loop* get_loop(int amount) const;
 	void create_loop();
 
 private:
-	// map of (name, num parameters) to a list of functions
-	std::map<std::pair<std::string, int>, std::vector<Function*>> functions;
-	std::unordered_map<const Function*, llvm::Function*> llvm_functions;
-	Type return_type;
-
-	std::unordered_map<std::string, Variable*> globals;
-
+	Module* module;
+	Function* current_func = nullptr;
 	Scope root_scope;
 	Scope* current_scope;
 };

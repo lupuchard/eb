@@ -2,7 +2,7 @@
 
 void Circuiter::shorten(Module& module) {
 	for (size_t i = 0; i < module.size(); i++) {
-		Item& item = *module[i];
+		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
@@ -98,7 +98,8 @@ void Circuiter::shorten(Expr& expr) {
 	shorten(expr);
 }
 
-void Circuiter::merge(std::vector<int>& side_fx_stack, std::vector<std::vector<std::unique_ptr<Tok>*>>& stack,
+void Circuiter::merge(std::vector<int>& side_fx_stack,
+                      std::vector<std::vector<std::unique_ptr<Tok>*>>& stack,
                       std::vector<std::pair<int, int>>& range_stack, int num, bool side_fx,
                       size_t j) {
 	std::vector<std::unique_ptr<Tok>*> vec;

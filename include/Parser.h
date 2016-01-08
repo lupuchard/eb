@@ -7,13 +7,14 @@
 
 class Parser {
 public:
-	Module construct(const std::vector<Token>& tokens);
+	void construct(Module& module, const std::vector<Token>& tokens);
 
 private:
-	Module                       do_module();
+	void                         do_module(Module& module);
 	std::unique_ptr<Item>        do_item();
 	std::unique_ptr<Function>    do_function();
-	std::unique_ptr<Global>      do_global();
+	std::unique_ptr<Global>      do_global(bool conzt);
+	std::unique_ptr<Import>      do_import(const Token& kw);
 	Block                        do_block();
 	std::unique_ptr<Statement>   do_statement();
 	std::unique_ptr<Declaration> do_declare(const Token& ident);
@@ -34,6 +35,9 @@ private:
 	const Token& expect_ident();
 	const Token& next(int i = 1);
 	const Token& peek(int i = 1);
+	void assert_simple_ident(const Token& ident);
+
+
 	const std::vector<Token>* tokens;
 	size_t index = 0;
 };

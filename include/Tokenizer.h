@@ -8,7 +8,7 @@
 #include <fstream>
 #include <unordered_map>
 
-enum class Trait { INCLUDE };
+enum class Trait { INCLUDE, OUT_BUILD, OUT_EXEC };
 
 class Tokenizer {
 public:
@@ -38,12 +38,13 @@ private:
 
 	const std::unordered_map<std::string, Token::Form> KEYWORDS = {
 			{"true", Token::KW_TRUE}, {"false", Token::KW_FALSE},
-			{"pub", Token::KW_PUB}, {"fn", Token::KW_FN}, {"return", Token::KW_RETURN},
-			{"if", Token::KW_IF}, {"else", Token::KW_ELSE},
+			{"pub", Token::KW_PUB}, {"fn", Token::KW_FN},
+			{"return", Token::KW_RETURN}, {"if", Token::KW_IF}, {"else", Token::KW_ELSE},
 			{"while", Token::KW_WHILE}, {"continue", Token::KW_CONTINUE}, {"break", Token::KW_BREAK}
 	};
 	const std::unordered_map<std::string, Trait> TRAITS = {
-			{"include", Trait::INCLUDE}
+			{"include", Trait::INCLUDE},
+			{"out_build", Trait::OUT_BUILD}, {"out_exec", Trait::OUT_EXEC}
 	};
 	const Token BLANK_TOKEN;
 };

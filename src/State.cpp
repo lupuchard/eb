@@ -11,9 +11,7 @@ Scope& Scope::to_subscope(Block& block) {
 	}
 	Scope& subscope = *iter->second;
 	for (auto& var_entry : subscope.variables) {
-		if (!var_entry.second.second[0].is_param) {
-			var_entry.second.first = -1;
-		}
+		var_entry.second.first = var_entry.second.second[0].is_param ? 0 : -1;
 	}
 	return subscope;
 }
@@ -59,11 +57,16 @@ Variable* Scope::get(const std::string& name) {
 		if (parent == nullptr) return nullptr;
 		return parent->get(name);
 	}
+	assert(iter->second.first > -1);
 	return &iter->second.second[iter->second.first];
 }
 
-State::State() {
+State::State(Module& module): module(&module) {
 	current_scope = &root_scope;
+}
+
+Module& State::get_module() {
+	return *module;
 }
 
 void State::descend(Block& block) {
@@ -73,20 +76,15 @@ void State::ascend() {
 	current_scope = current_scope->get_parent();
 }
 
-bool State::declare(Global& global) {
-	if (globals.count(global.token.str())) return true;
-	globals[global.token.str()] = &global.var;
-	return false;
-}
 Variable& State::declare(std::string name, Type type) {
 	return current_scope->declare(name, type);
 }
 Variable* State::get_var(const std::string& name) const {
 	auto var = current_scope->get(name);
 	if (var == nullptr) {
-		auto iter = globals.find(name);
-		if (iter == globals.end()) return nullptr;
-		return iter->second;
+		Global* global = module->get_global(name);
+		if (global == nullptr) return nullptr;
+		return &global->var;
 	}
 	return var;
 }
@@ -94,46 +92,12 @@ Variable& State::next_var(const std::string& name) {
 	return current_scope->next(name);
 }
 
-bool State::declare(Function& func) {
-	auto key = std::make_pair(func.token.str(), func.param_names.size());
-	auto iter = functions.find(key);
-	if (iter == functions.end()) {
-		std::vector<Function*> vec;
-		vec.push_back(&func);
-		functions[key] = vec;
-	} else {
-		for (Function* f : iter->second) {
-			if (f->param_types == func.param_types) {
-				return true;
-			}
-		}
-		func.index = (int)iter->second.size();
-		iter->second.push_back(&func);
-	}
-	return false;
+void State::set_func(Function& func) {
+	current_func = &func;
 }
-const std::vector<Function*>& State::get_functions(int num_params, const std::string& name) const {
-	auto key = std::make_pair(name, num_params);
-	auto iter = functions.find(key);
-	if (iter == functions.end()) {
-		static std::vector<Function*> empty;
-		return empty;
-	}
-	return iter->second;
-}
-
-void State::set_func_llvm(const Function& func, llvm::Function& llvm_func) {
-	llvm_functions[&func] = &llvm_func;
-}
-llvm::Function* State::get_func_llvm(const Function& name) {
-	return llvm_functions[&name];
-}
-
-void State::set_return(Type type) {
-	return_type = type;
-}
-Type State::get_return() const {
-	return return_type;
+Function& State::get_func() const {
+	assert(current_func);
+	return *current_func;
 }
 
 Loop* State::get_loop(int amount) const {

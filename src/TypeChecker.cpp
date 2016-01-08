@@ -1,28 +1,18 @@
 #include "passes/TypeChecker.h"
 #include "Exception.h"
-#include <iostream>
 
 void TypeChecker::check(Module& module, State& state) {
 	for (size_t i = 0; i < module.size(); i++) {
-		Item& item = *module[i];
+		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
-				bool exists = state.declare(func);
-				if (exists) throw Exception("Duplicate function definition", func.token);
+				state.set_func(func);
 				state.descend(func.block);
-				state.set_return(func.return_type);
-				for (size_t j = 0; j < func.param_names.size(); j++) {
-					state.declare(func.param_names[j]->str(), func.param_types[j]).is_param = true;
-				}
 				check(func.block, state);
 				state.ascend();
 			} break;
-			case Item::GLOBAL: {
-				Global& global = (Global&)item;
-				bool exists = state.declare(global);
-				if (exists) throw Exception("Global with same name already exists", global.token);
-			} break;
+			default: break;
 		}
 	}
 }
@@ -33,14 +23,15 @@ void TypeChecker::check(Block& block, State& state) {
 		switch (statement.form) {
 			case Statement::DECLARATION: {
 				Declaration& decl = (Declaration&)statement;
-				Type type;
-				if (decl.type_token != nullptr) {
-					type = Type::parse(decl.type_token->str());
-				}
+				Variable& var = state.next_var(decl.token.str());
 				if (!decl.expr.empty()) {
-					type = type.merge(type_of(decl.expr, state, decl.token));
+					Type type = var.type.merge(type_of(decl.expr, state, decl.token));
+					if (!var.type.is_valid()) {
+						throw Exception("Cannot assign " + type.to_string() + "to variable of " +
+						                "type " + var.type.to_string(), decl.token);
+					}
+					var.type = type;
 				}
-				state.declare(decl.token.str(), type);
 			} break;
 			case Statement::ASSIGNMENT: {
 				Type type = type_of(statement.expr, state, statement.token);
@@ -61,12 +52,12 @@ void TypeChecker::check(Block& block, State& state) {
 				type_of(statement.expr, state, statement.token);
 			} break;
 			case Statement::RETURN: {
-				if (state.get_return().get() == Prim::VOID) break;
+				if (state.get_func().return_type.get() == Prim::VOID) break;
 				Type type = type_of(statement.expr, state, statement.token);
-				Type t = state.get_return().merge(type);
+				Type t = state.get_func().return_type.merge(type);
 				if (!t.is_valid()) {
 					throw Exception("Cannot return " + type.to_string() + "from func returning " +
-					                state.get_return().to_string(), statement.token);
+					                state.get_func().return_type.to_string(), statement.token);
 				}
 			} break;
 			case Statement::IF: {
@@ -115,25 +106,24 @@ Type TypeChecker::type_of(Expr &expr, State& state, const Token& token) {
 			if (var == nullptr) throw Exception("Variable not found", *tok.token);
 			stack.push_back(&var->type);
 		} else if (tok.form == Tok::FUNC) {
-			int num_params = ((FuncTok&)tok).num_params;
-			auto& funcs = state.get_functions(num_params, tok.token->str());
-			if (funcs.empty()) throw Exception("Function not found", *tok.token);
-			std::vector<Type> possible((size_t)num_params, Type::invalid());
+			FuncTok& ftok = (FuncTok&)tok;
+			if (ftok.possible_funcs.empty()) throw Exception("Function not found.", *tok.token);
+			std::vector<Type> possible((size_t)ftok.num_params, Type::invalid());
 			std::vector<Function*> valid_funcs;
 
-			std::vector<Type*> arguments(stack.end() - num_params, stack.end());
-			stack.erase(stack.end() - num_params, stack.end());
+			std::vector<Type*> arguments(stack.end() - ftok.num_params, stack.end());
+			stack.erase(stack.end() - ftok.num_params, stack.end());
 
-			for (Function* func : funcs) {
+			for (Function* func : ftok.possible_funcs) {
 				if (func->allows(arguments)) {
-					for (size_t i = 0; i < num_params; i++) {
+					for (size_t i = 0; i < ftok.num_params; i++) {
 						possible[i].add(func->param_types[i].get());
 					}
 					valid_funcs.push_back(func);
 				}
 			}
 			if (valid_funcs.empty()) throw Exception("Arguments match no function", *tok.token);
-			for (size_t i = 0; i < num_params; i++) {
+			for (size_t i = 0; i < ftok.num_params; i++) {
 				*arguments[i] = arguments[i]->merge(possible[i]);
 			}
 			stack.push_back(valid_funcs.size() == 1 ? &valid_funcs[0]->return_type : &unknown);

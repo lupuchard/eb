@@ -26,6 +26,7 @@ public:
 	bool is_known() const;
 	bool is_valid() const;
 	bool has(Prim prim) const;
+	size_t size() const;
 	Prim get() const;
 
 	static Type parse(const std::string& name);

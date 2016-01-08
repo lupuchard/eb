@@ -24,10 +24,10 @@ struct Token {
 	Type type = Type::invalid();
 
 	inline const std::string& str() const {
+		assert(!str_list.empty());
 		return str_list[0];
 	}
 	inline const std::vector<std::string>& ident() const {
-		assert(form == IDENT);
 		return str_list;
 	}
 

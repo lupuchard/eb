@@ -1,24 +1,6 @@
-#include "Tokenizer.h"
-#include "Parser.h"
-#include "passes/Passer.h"
-#include "Builder.h"
-#include "Exception.h"
 #include "catch.hpp"
-#include <iostream>
-#include <fstream>
-
-int exec(const char* cmd) {
-	FILE* pipe = popen(cmd, "r");
-	if (!pipe) return -1;
-	char buffer[128];
-	while (!feof(pipe)) {
-		if (fgets(buffer, 128, pipe) != nullptr) {
-			std::cout << buffer;
-		}
-	}
-	int status = pclose(pipe);
-	return WEXITSTATUS(status);
-}
+#include "Compiler.h"
+#include "util/Filesystem.h"
 
 void test(const std::string& filename, int expected_result) {
 	std::cout << "Testing " << filename << std::endl;
@@ -26,27 +8,9 @@ void test(const std::string& filename, int expected_result) {
 	std::stringstream buffer;
 	buffer << file.rdbuf();
 
-	Tokenizer tokenizer(buffer.str());
-	Parser constructor;
-	Module module;
-	try {
-		module = constructor.construct(tokenizer.get_tokens());
-	} catch (Exception e) {
-		FAIL("Parser failed for '" << filename << "': " << e.what());
-	}
-	Passer passer;
-	State state;
-	try {
-		passer.pass(module, state);
-	} catch (Exception e) {
-		FAIL("Passer failed for '" << filename << "': " << e.what());
-	}
-	Builder builder;
-	builder.build(module, state, "out.ll");
-	if (exec("llc out.ll")) FAIL("LLVM compilation failed");
-	if (exec("clang -o out out.s shim.a")) FAIL("Linking failed");
+	Compiler compiler(filename, "../out", "../../out");
 
-	REQUIRE(exec("./out") == expected_result);
+	REQUIRE(exec("../../out") == expected_result);
 }
 
 bool file_exists(const std::string& name) {
@@ -58,14 +22,18 @@ bool file_exists(const std::string& name) {
 }
 
 TEST_CASE("full tests", "[full]") {
+	bool success = change_directory("test/test_code");
+	REQUIRE(success);
 	if (!file_exists("shim.a")) {
+		system("cp ../../shim.c .");
 		system("clang -c shim.c");
 		system("ar rcs shim.a shim.o");
 	}
-	test("test/test_code/simple.eb", 0);
-	test("test/test_code/loops.eb", 0);
-	test("test/test_code/functional.eb", 0);
-	test("test/test_code/overloading.eb", 0);
-	test("test/test_code/fib.eb", 0);
-	test("test/test_code/short.eb", 0);
+	test("simple.eb", 0);
+	test("loops.eb", 0);
+	test("functional.eb", 0);
+	test("overloading.eb", 0);
+	test("fib.eb", 0);
+	test("short.eb", 0);
+	test("import.eb", 8);
 }

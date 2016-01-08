@@ -51,6 +51,7 @@ struct OpTok: public Tok {
 struct VarTok: public Tok {
 	VarTok(const Token& token): Tok(token, VAR) { }
 	Variable* var = nullptr;
+	bool external = true;
 };
 
 typedef std::vector<std::unique_ptr<Tok>> Expr;

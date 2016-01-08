@@ -7,10 +7,10 @@
 class ReturnChecker {
 public:
 	void check(Module& module);
-	bool check(Block& block);
-	void create_implicit_returns(Block& block);
 
 private:
+	bool check(Block& block);
+	void create_implicit_returns(Block& block);
 	void create_drops(Block* block);
 	void create_drops(Expr& expr, std::vector<Statement*>& new_statements);
 	void create_drop(Block& block, const Token& token, Token& tmp);

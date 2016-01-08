@@ -4,9 +4,12 @@
 #include "ast/Module.h"
 #include "State.h"
 
-class LitCompleter {
+class Completer {
 public:
 	void complete(Module& module, State& state);
+
+private:
+	void complete_vars(Block& block, State& state);
 	void complete(Block& block, State& state);
 	void complete(Expr& expr, State& state, Type type);
 };

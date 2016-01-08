@@ -1,45 +1,79 @@
 #include "Parser.h"
 #include "Exception.h"
-#include <unordered_map>
 
-Module Parser::construct(const std::vector<Token>& tokens) {
+void Parser::construct(Module& module, const std::vector<Token>& tokens) {
 	this->tokens = &tokens;
 	index = 0;
-	return do_module();
+	do_module(module);
 }
 
-Module Parser::do_module() {
-	Module module;
+void Parser::do_module(Module& module) {
 	while (true) {
 		trim();
 		if (index >= tokens->size()) break;
 		auto item = do_item();
 		module.push_back(std::move(item));
 	}
-	return module;
 }
 
 std::unique_ptr<Item> Parser::do_item() {
-	const Token* token = &peek();
+	const Token* token = &next();
 	bool pub = false;
 	if (token->form == Token::KW_PUB) {
 		pub = true;
-		next();
-		token = &peek();
+		token = &next();
 	}
 	std::unique_ptr<Item> item;
-	switch (token->form) {
-		case Token::KW_FN: item = do_function(); break;
-		case Token::IDENT: item = do_global();   break;
-		default: throw Exception("Expected 'fn' or ident", *token);
+	if (token->form == Token::KW_FN) {
+		item = do_function();
+	} else if (token->str() == "import") {
+		item = do_import(*token);
+	} else if (token->str() == "global") {
+		item = do_global(false);
+	} else if (token->str() == "const") {
+		item = do_global(true);
+	} else {
+		throw Exception("Expected item", *token);
 	}
 	item->pub = pub;
 	return item;
 }
 
+std::unique_ptr<Import> Parser::do_import(const Token& kw) {
+	std::unique_ptr<Import> import(new Import(kw));
+	while (true) {
+		const Token& next_token = next();
+		import->target.push_back(&next_token);
+		if (next_token.str() == "[") {
+			import->target.push_back(&next_token);
+			while (true) {
+				const Token& nexter_token = next();
+				import->target.push_back(&nexter_token);
+				if (nexter_token.form == Token::IDENT) {
+					if (peek().str() == "]") {
+						import->target.push_back(&next());
+						break;
+					}
+				} else if (nexter_token.str() == "]") {
+					break;
+				}
+				expect(",");
+			}
+		} else if (!(next_token.form == Token::IDENT || next_token.str() == "*")) {
+			throw Exception("Invalid import syntax", kw);
+		}
+		if (peek().form == Token::END) {
+			next();
+			break;
+		}
+		expect(".");
+	}
+	return import;
+}
+
 std::unique_ptr<Function> Parser::do_function() {
-	next();
 	const Token& name_token = expect_ident();
+	assert_simple_ident(name_token);
 	std::unique_ptr<Function> function(new Function(name_token));
 	expect("(");
 	trim();
@@ -47,13 +81,12 @@ std::unique_ptr<Function> Parser::do_function() {
 	// parameters
 	const Token* param_token = &next();
 	while (param_token->str() != ")") {
-		if (param_token->form != Token::IDENT) {
-			throw Exception("Expected ident", *param_token);
-		}
+		assert_simple_ident(*param_token);
 		function->param_names.push_back(param_token);
 		expect(":");
 		const Token& type_token = expect_ident();
 		function->param_types.push_back(Type::parse(type_token.str()));
+		assert(function->param_types.back().is_valid());
 		param_token = &next();
 		trim();
 		if (param_token->str() == ",") param_token = &next();
@@ -75,11 +108,11 @@ std::unique_ptr<Function> Parser::do_function() {
 	return std::move(function);
 }
 
-std::unique_ptr<Global> Parser::do_global() {
+std::unique_ptr<Global> Parser::do_global(bool conzt) {
 	const Token& name = next();
 	expect(":");
 	const Token& type_token = expect_ident();
-	return std::unique_ptr<Global>(new Global(name, Type::parse(type_token.str())));
+	return std::unique_ptr<Global>(new Global(name, Type::parse(type_token.str()), conzt));
 }
 
 Block Parser::do_block() {
@@ -149,6 +182,7 @@ std::unique_ptr<Declaration> Parser::do_declare(const Token& ident) {
 	if (token.str() == "=") { // var := val
 		declaration.reset(new Declaration(ident));
 	} else if (token.form == Token::IDENT) {  // var: type
+		assert_simple_ident(token);
 		const Token& eq_token = next();
 		if (eq_token.form == Token::END) {
 			return std::unique_ptr<Declaration>(new Declaration(ident, token));
@@ -430,5 +464,11 @@ int Parser::precedence(Op op) {
 		case Op::AND:                                         return  1;
 		case Op::OR:                                          return  0;
 		case Op::TEMP_PAREN: case Op::TEMP_FUNC:              return -1;
+	}
+}
+
+void Parser::assert_simple_ident(const Token& ident) {
+	if (ident.form != Token::IDENT || ident.ident().size() > 1) {
+		throw Exception("Expected simple identifier", ident);
 	}
 }

@@ -1,26 +1,48 @@
 #include "Builder.h"
+#include "util/Filesystem.h"
 #include "llvm/IR/Module.h"
 #include "llvm/PassManager.h"
 #include "llvm/Assembly/PrintModulePass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 #include <fstream>
-#include <iostream>
 
 void Builder::build(Module& module, State& state, const std::string& out_file) {
-	std::ofstream file;
-	file.open(out_file);
-	llvm::raw_os_ostream stream(file);
-	build(module, state, stream);
-}
-
-void Builder::build(Module& module, State& state, llvm::raw_ostream& stream) {
 	llvm::Module llvm_module("thang_main", llvm::getGlobalContext());
 	c = &llvm_module.getContext();
+
+	for (auto func : module.external_functions) {
+		llvm::Type* result = type_to_llvm(func->return_type);
+		std::vector<llvm::Type*> args;
+		for (size_t i = 0; i < func->param_names.size(); i++) {
+			args.push_back(type_to_llvm(func->param_types[i]));
+		}
+		auto llvm_args = llvm::ArrayRef<llvm::Type*>(args);
+		llvm::FunctionType* llvm_func = llvm::FunctionType::get(result, llvm_args, false);
+		//llvm_functions[func] = llvm_module.getOrInsertGlobal(func->token.str(), llvm_func);
+		llvm_functions[func] = llvm_module.getOrInsertFunction(func->unique_name, llvm_func);
+	}
+	for (auto global : module.external_globals) {
+		llvm::Type* llvm_type = type_to_llvm(global->var.type);
+		global->var.llvm = llvm_module.getOrInsertGlobal(global->unique_name, llvm_type);
+	}
+
 	do_module(module, llvm_module, state);
-	llvm::PassManager pass_manager;
-	pass_manager.add(llvm::createPrintModulePass(&stream));
-	pass_manager.run(llvm_module);
+
+	std::ofstream file;
+	create_directory(out_file);
+	file.open(out_file);
+	llvm::raw_os_ostream stream(file);
+
+	if (out_file.back() == 'c') {
+		// bitcode?
+		llvm::WriteBitcodeToFile(&llvm_module, stream);
+	} else {
+		llvm::PassManager pass_manager;
+		pass_manager.add(llvm::createPrintModulePass(&stream));
+		pass_manager.run(llvm_module);
+	}
 }
 
 llvm::Type* Builder::type_to_llvm(const Type& type) {
@@ -43,25 +65,21 @@ llvm::Type* Builder::type_to_llvm(const Type& type) {
 
 void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state) {
 	for (size_t i = 0; i < module.size(); i++) {
-		Item& item = *module[i];
+		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
 
-				llvm::Type* ret_type = type_to_llvm(func.return_type);
+				llvm::Type* ret = type_to_llvm(func.return_type);
 				std::vector<llvm::Type*> params;
 				for (size_t j = 0; j < func.param_types.size(); j++) {
 					params.push_back(type_to_llvm(func.param_types[j]));
 				}
-
-				std::stringstream ss;
-				ss << func.token.str() << "." << func.param_types.size() << "." << func.index;
-				std::string name = ss.str();
-				name = name == "main.0.0" ? "eb$main" : name;
-				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(name,
-						llvm::FunctionType::get(ret_type, llvm::ArrayRef<llvm::Type*>(params), false)
+				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(
+						func.token.str() == "main" ? "eb$main" : func.unique_name,
+						llvm::FunctionType::get(ret, llvm::ArrayRef<llvm::Type*>(params), false)
 				));
-				state.set_func_llvm(func, *llvm_func);
+				llvm_functions[&func] = llvm_func;
 
 				state.descend(func.block);
 				auto iter = llvm_func->arg_begin();
@@ -78,11 +96,12 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				Global& global = (Global&)item;
 				llvm::Type* type = type_to_llvm(global.var.type);
 				llvm::GlobalVariable* llvm_global = llvm::cast<llvm::GlobalVariable>(
-						llvm_module.getOrInsertGlobal(global.token.str(), type)
+						llvm_module.getOrInsertGlobal(global.unique_name, type)
 				);
 				llvm_global->setInitializer(default_value(global.var.type, type));
 				global.var.llvm = llvm_global;
 			} break;
+			case Item::IMPORT: break;
 		}
 	}
 }
@@ -217,7 +236,8 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				type_stack.push_back(&var.type);
 			} break;
 			case Tok::FUNC: {
-				Function& func = *((FuncTok&)tok).func;
+				assert(((FuncTok&)tok).possible_funcs.size() == 1);
+				Function& func = *((FuncTok&)tok).possible_funcs[0];
 				std::vector<llvm::Value*> args;
 				args.resize(func.param_types.size());
 				for (int i = (int)func.param_types.size() - 1; i >= 0; i--) {
@@ -226,7 +246,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 					type_stack.pop_back();
 				}
 				value_stack.push_back(builder.CreateCall(
-						state.get_func_llvm(func),
+						llvm_functions[&func],
 						llvm::ArrayRef<llvm::Value*>(args), func.token.str()
 				));
 				type_stack.push_back(&func.return_type);

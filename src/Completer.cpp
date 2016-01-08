@@ -1,12 +1,14 @@
-#include "passes/LitCompleter.h"
+#include "passes/Completer.h"
 #include "Exception.h"
 
-void LitCompleter::complete(Module& module, State& state) {
+void Completer::complete(Module& module, State& state) {
 	for (size_t i = 0; i < module.size(); i++) {
-		Item& item = *module[i];
+		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
+				state.set_func(func);
+				complete_vars(func.block, state);
 				complete(func.block, state);
 			} break;
 			default: break;
@@ -14,7 +16,29 @@ void LitCompleter::complete(Module& module, State& state) {
 	}
 }
 
-void LitCompleter::complete(Block& block, State& state) {
+void Completer::complete_vars(Block& block, State& state) {
+	state.descend(block);
+	for (size_t i = 0; i < block.size(); i++) {
+		Statement& statement = *block[i];
+		switch (statement.form) {
+			case Statement::DECLARATION: {
+				Declaration& declaration = (Declaration&)statement;
+				Variable& var = state.next_var(declaration.token.str());
+				var.type.complete();
+				if (!var.type.is_known()) {
+					throw Exception("Type could not be determined.", declaration.token);
+				}
+			} break;
+			default: break;
+		}
+		for (Block* inner_block : statement.blocks()) {
+			complete_vars(*inner_block, state);
+		}
+	}
+	state.ascend();
+}
+
+void Completer::complete(Block& block, State& state) {
 	state.descend(block);
 	for (size_t i = 0; i < block.size(); i++) {
 		Statement& statement = *block[i];
@@ -32,7 +56,7 @@ void LitCompleter::complete(Block& block, State& state) {
 				complete(statement.expr, state, Type());
 			} break;
 			case Statement::RETURN: {
-				Type type = state.get_return();
+				Type type = state.get_func().return_type;
 				if (type.get() != Prim::VOID) complete(statement.expr, state, type);
 			} break;
 			case Statement::IF: {
@@ -52,7 +76,7 @@ void LitCompleter::complete(Block& block, State& state) {
 	state.ascend();
 }
 
-void LitCompleter::complete(Expr& expr, State& state, Type final_type) {
+void Completer::complete(Expr& expr, State& state, Type final_type) {
 	std::vector<Type> type_stack;
 
 	// a list of references for each type that the type links to, so when the type is complete
@@ -69,34 +93,36 @@ void LitCompleter::complete(Expr& expr, State& state, Type final_type) {
 				ref_stack.emplace_back();
 			} break;
 			case Tok::FUNC: {
-				FuncTok& func_tok = (FuncTok&)tok;
-				auto& funcs = state.get_functions(func_tok.num_params, tok.token->str());
-				if (funcs.empty()) throw Exception("Function not found", *tok.token);
+				FuncTok& ftok = (FuncTok&)tok;
 				std::vector<Function*> valid_funcs;
 
-				std::vector<Type> args(type_stack.end() - func_tok.num_params, type_stack.end());
-				std::vector<std::vector<Type*>> ref_args(ref_stack.end() - func_tok.num_params,
+				std::vector<Type> args(type_stack.end() - ftok.num_params, type_stack.end());
+				std::vector<std::vector<Type*>> ref_args(ref_stack.end() - ftok.num_params,
 				                                         ref_stack.end());
-				type_stack.erase(type_stack.end() - func_tok.num_params, type_stack.end());
-				ref_stack.erase(  ref_stack.end() - func_tok.num_params,  ref_stack.end());
+				type_stack.erase(type_stack.end() - ftok.num_params, type_stack.end());
+				ref_stack.erase(  ref_stack.end() - ftok.num_params,  ref_stack.end());
 
-				for (Function* func : funcs) {
+				for (Function* func : ftok.possible_funcs) {
 					if (func->allows(args)) {
 						valid_funcs.push_back(func);
 					}
 				}
 				assert(!valid_funcs.empty());
 				if (valid_funcs.size() > 2) throw Exception("Couldn't resolve func", *tok.token);
-				for (size_t i = 0; i < func_tok.num_params; i++) {
+				for (size_t i = 0; i < ftok.num_params; i++) {
 					if (!args[i].is_known()) {
 						for (Type* type : ref_args[i]) {
 							*type = valid_funcs[0]->param_types[i];
 						}
 					}
 				}
-				func_tok.func = valid_funcs[0];
+				ftok.possible_funcs = { valid_funcs[0] };
 				type_stack.push_back(valid_funcs[0]->return_type);
 				ref_stack.emplace_back();
+
+				if (ftok.external) {
+					state.get_module().external_functions.push_back(valid_funcs[0]);
+				}
 			} break;
 			case Tok::OP: {
 				switch (((OpTok&)tok).op) {

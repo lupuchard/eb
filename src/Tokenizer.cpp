@@ -1,9 +1,5 @@
-//
-// Created by luke on 12/6/15.
-//
-
 #include "Tokenizer.h"
-#include <iostream>
+#include <algorithm>
 
 Tokenizer::Tokenizer(const std::string& str): str(str) {
 	do_whitespace();
@@ -34,7 +30,7 @@ void Tokenizer::do_whitespace() {
 			tokens.push_back(Token(Token::END, "\n", line, column));
 			line++;
 			column = 0;
-		} else if (isalpha(c) || c == '_' || !isascii(c)) {
+		} else if (is_valid_ident_beginning(c)) {
 			return do_word();
 		} else if (isdigit(c) || c == '.') {
 			return do_number();
@@ -55,7 +51,7 @@ void Tokenizer::do_word() {
 	while (true) {
 		column++;
 		char c = str[++index];
-		if (isalnum(c) || c == '_' || !isascii(c)) {
+		if (is_valid_ident(c)) {
 			word += c;
 		} else {
 			auto iter = KEYWORDS.find(word);
@@ -125,11 +121,11 @@ void Tokenizer::do_symbol() {
 		}
 	} else if (isspace(c)) {
 		return do_whitespace();
-	} else if (isalpha(c) || c == '_' || !isascii(c)) {
+	} else if (is_valid_ident_beginning(c)) {
 		return do_word();
 	} else if (c == '.' && tokens.back().form == Token::IDENT) {
 		char d = str[++index];
-		if (isalpha(d) || d == '_' || !isascii(d)) {
+		if (is_valid_ident_beginning(d)) {
 			connecting = true;
 			do_word();
 		} else {

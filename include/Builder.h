@@ -9,7 +9,6 @@
 class Builder {
 public:
 	void build(Module& module, State& state, const std::string& out_file);
-	void build(Module& module, State& state, llvm::raw_ostream& stream);
 
 private:
 	void do_module(Module& module, llvm::Module& llvm_module, State& state);
@@ -25,6 +24,7 @@ private:
 
 	llvm::LLVMContext* c;
 	llvm::Function* llvm_func;
+	std::unordered_map<const Function*, llvm::Constant*> llvm_functions;
 };
 
 

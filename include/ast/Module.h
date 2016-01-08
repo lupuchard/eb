@@ -1,56 +1,38 @@
-#ifndef EBC_ITEM_H
-#define EBC_ITEM_H
+#ifndef EBC_MODULE_H
+#define EBC_MODULE_H
 
-#include "Statement.h"
-#include "Variable.h"
+#include "Item.h"
+#include "Tree.h"
+#include <map>
 
-struct Item {
-	enum Form { FUNCTION, GLOBAL };
-	Item(Form form): form(form) { }
-	Form form;
-	bool pub = false;
-	virtual void _() const { }
+class Module {
+public:
+	// returns true if function already exists
+	bool declare(Function& func);
+	const std::vector<Function*>& get_functions(int num_parameters, const std::string& name) const;
+
+	bool declare(Global& global);
+	Global* get_global(const std::string& name);
+
+	void push_back(std::unique_ptr<Item> item);
+	size_t size() const;
+	Item& operator[](size_t index);
+	const Item& operator[](size_t index) const;
+
+	bool add_import(const std::vector<std::string>& module_name, Module& module);
+	Module* search(const std::vector<std::string>& module_name);
+
+	std::vector<std::string> name;
+	std::vector<Function*> external_functions;
+	std::vector<Global*> external_globals;
+
+private:
+	Tree<Module> imports;
+	std::vector<std::unique_ptr<Item>> items;
+
+	// map of (name, num parameters) to a list of functions
+	std::map<std::pair<std::string, int>, std::vector<Function*>> functions;
+	std::unordered_map<std::string, Global*> globals;
 };
 
-struct Global: public Item {
-	Global(const Token& token, Type type): token(token), var(type), Item(GLOBAL) { }
-	const Token& token;
-	Variable var;
-};
-
-struct Function: public Item {
-	Function(const Token& token): token(token), Item(FUNCTION) { }
-
-	inline bool allows(const std::vector<Type*>& arguments) {
-		for (size_t i = 0; i < arguments.size(); i++) {
-			if (!arguments[i]->has(param_types[i].get())) {
-				return false;
-			}
-		}
-		return true;
-	}
-	inline bool allows(const std::vector<Type>& arguments) {
-		for (size_t i = 0; i < arguments.size(); i++) {
-			if (!arguments[i].has(param_types[i].get())) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	const Token& token;
-	Block block;
-	Type return_type = Type(Prim::VOID);
-	int index = 0;
-	std::vector<Type> param_types;
-	std::vector<const Token*> param_names;
-};
-struct FuncTok: public Tok {
-	FuncTok(const Token& token, int num_params): Tok(token, FUNC), num_params(num_params) { }
-	int num_params;
-	Function* func = nullptr;
-};
-
-typedef std::vector<std::unique_ptr<Item>> Module;
-
-#endif //EBC_ITEM_H
+#endif //EBC_MODULE_H

@@ -8,8 +8,9 @@ TEST_CASE("function", "[constructor]") {
 	Tokenizer tokenizer("fn wob(a: I32, b: F64): Bool { return false; }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Function& function = dynamic_cast<Function&>(*mod[0]);
+	Module mod;
+	constructor.construct(mod, tokens);
+	Function& function = dynamic_cast<Function&>(mod[0]);
 	REQUIRE(function.param_types.size() == 2);
 	REQUIRE(function.param_names[0]->str() == "a");
 	REQUIRE(function.param_types[1].get() == Prim::F64);
@@ -21,8 +22,9 @@ TEST_CASE("assignment", "[constructor]") {
 	Tokenizer tokenizer("fn dob() { x = 654 + y;  x += y * 32; }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Block& block = ((Function&)*mod[0]).block;
+	Module mod;
+	constructor.construct(mod, tokens);
+	Block& block = ((Function&)mod[0]).block;
 	REQUIRE(block.size() == 2);
 
 	Statement& assignment1 = *block[0];
@@ -45,8 +47,9 @@ TEST_CASE("declaration", "[constructor]") {
 	Tokenizer tokenizer("fn dob() { x := 3;  y: i32 = x - 4;  z: f64; }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Block& block = ((Function&)*mod[0]).block;
+	Module mod;
+	constructor.construct(mod, tokens);
+	Block& block = ((Function&)mod[0]).block;
 	REQUIRE(block.size() == 3);
 
 	Declaration& declaration1 = dynamic_cast<Declaration&>(*block[0]);
@@ -67,8 +70,9 @@ TEST_CASE("expression", "[constructor]") {
 	Tokenizer tokenizer("fn dob() { maths = 5 - 4 * (-3 + 2) / 1; \n lagic = true && (3 <= 4); }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Block& block = ((Function&)*mod[0]).block;
+	Module mod;
+	constructor.construct(mod, tokens);
+	Block& block = ((Function&)mod[0]).block;
 
 	Expr& expr1 = block[0]->expr;
 	REQUIRE(expr1.size() == 10);
@@ -97,8 +101,9 @@ TEST_CASE("function call", "[constructor]") {
 	Tokenizer tokenizer("fn dob() { x = foo(1, 2 + 3,); x = bar(); x = baz(a, b, c); }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Block& block = ((Function&)*mod[0]).block;
+	Module mod;
+	constructor.construct(mod, tokens);
+	Block& block = ((Function&)mod[0]).block;
 
 	Expr& expr1 = block[0]->expr;
 	REQUIRE(expr1[4]->token->str() == "foo");
@@ -116,8 +121,9 @@ TEST_CASE("if", "[constructor]") {
 	Tokenizer tokenizer("fn t() { if x < y { x += 1 } else if x > y { y += 1 } else { z = 0 } }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
-	Module mod = constructor.construct(tokens);
-	Block& block = ((Function&)*mod[0]).block;
+	Module mod;
+	constructor.construct(mod, tokens);
+	Block& block = ((Function&)mod[0]).block;
 
 	REQUIRE(block.size() == 1);
 	If& if_statement = dynamic_cast<If&>(*block[0]);
