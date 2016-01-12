@@ -38,16 +38,16 @@ TEST_CASE("Tokenize with comments", "[tokenizer]") {
 }
 
 TEST_CASE("Tokenize numbers", "[tokenizer]") {
-	Tokenizer tokenizer("1 1.1 1u 1f 1f32 .1f64 1.f 1i8 0b11 0x11");
+	Tokenizer tokenizer("1 1.1 1i 1f 1f32 .1f64 1.f 1i8 0b11 0x11");
 	auto& tokens = tokenizer.get_tokens();
-	REQUIRE(tokens[0].type == NUMBER);
-	REQUIRE(tokens[1].type == FLOAT);
-	REQUIRE(tokens[2].type == UNSIGNED);
-	REQUIRE(tokens[3].type == FLOAT);
-	REQUIRE(tokens[4].type.get() == Prim::F32);
-	REQUIRE(tokens[5].type.get() == Prim::F64);
-	REQUIRE(tokens[6].type == FLOAT);
-	REQUIRE(tokens[7].type.get() == Prim::I8);
+	REQUIRE(tokens[0].type == Type::IntLit);
+	REQUIRE(tokens[1].type == Type::Float);
+	REQUIRE(tokens[2].type == Type::Int);
+	REQUIRE(tokens[3].type == Type::Float);
+	REQUIRE(tokens[4].type == Type::F32);
+	REQUIRE(tokens[5].type == Type::F64);
+	REQUIRE(tokens[6].type == Type::Float);
+	REQUIRE(tokens[7].type == Type::I8);
 	REQUIRE(tokens[8].form == Token::INT);
 	REQUIRE(tokens[8].i() == 3);
 	REQUIRE(tokens[9].i() == 17);

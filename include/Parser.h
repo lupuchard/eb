@@ -18,17 +18,13 @@ private:
 	Block                        do_block();
 	std::unique_ptr<Statement>   do_statement();
 	std::unique_ptr<Declaration> do_declare(const Token& ident);
-	std::unique_ptr<Statement>   do_assign( const Token& ident, Op op, const Token* op_token);
+	std::unique_ptr<Statement>   do_assign( const Token& ident, const Token* op_token);
 	std::unique_ptr<Statement>   do_expr(   const Token& first);
 	std::unique_ptr<Statement>   do_return( const Token& kw);
 	std::unique_ptr<If>          do_if(     const Token& kw);
 	std::unique_ptr<While>       do_while(  const Token& kw);
 	std::unique_ptr<Break>       do_break(  const Token& kw);
 	void                         do_expr(Expr& expr, const std::string& terminator = ";");
-
-	Type return_type(Op op);
-	bool left_assoc(Op op);
-	int precedence(Op op);
 
 	void trim();
 	void expect(const std::string& str);

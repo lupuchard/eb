@@ -86,7 +86,7 @@ std::unique_ptr<Function> Parser::do_function() {
 		expect(":");
 		const Token& type_token = expect_ident();
 		function->param_types.push_back(Type::parse(type_token.str()));
-		assert(function->param_types.back().is_valid());
+		assert(function->param_types.back() != Type::Invalid);
 		param_token = &next();
 		trim();
 		if (param_token->str() == ",") param_token = &next();
@@ -130,6 +130,24 @@ Block Parser::do_block() {
 	return block;
 }
 
+struct Op {
+	Op(int precidence, int num_params = 2, bool left_assoc = true)
+			: precidence(precidence), num_params(num_params), left_assoc(left_assoc) { }
+	int precidence;
+	int num_params;
+	bool left_assoc;
+};
+Op ADD(8); Op SUB(8);
+Op MUL(9); Op DIV(9); Op MOD(9);
+Op NEG(10, 1, false); Op INV(10, 1, false);
+Op BAND(4); Op BOR(2); Op XOR(3);
+Op LSH(7); Op RSH(7);
+Op AND(1); Op OR(0); Op NOT(10, 1, false);
+Op LEQ(6); Op GEQ(6); Op LT(6); Op GT(6);
+Op EQ(5); Op NEQ(5);
+Op FUNC(-1, -1);
+Op PAREN(-1, -1);
+
 std::unique_ptr<Statement> Parser::do_statement() {
 	const Token& token = next();
 	switch (token.form) {
@@ -140,17 +158,13 @@ std::unique_ptr<Statement> Parser::do_statement() {
 				return do_declare(token);
 			} else if (token2.str() == "=") {
 				next();
-				return do_assign(token, Op::NOT, nullptr);
+				return do_assign(token, nullptr);
 			} else if (peek(2).str() == "=") {
 				next(2);
 				switch (token2.str()[0]) {
-					case '+': return do_assign(token, Op::ADD,  &token2);
-					case '-': return do_assign(token, Op::SUB,  &token2);
-					case '*': return do_assign(token, Op::MUL,  &token2);
-					case '/': return do_assign(token, Op::DIV,  &token2);
-					case '&': return do_assign(token, Op::BAND, &token2);
-					case '|': return do_assign(token, Op::BOR,  &token2);
-					case '^': return do_assign(token, Op::XOR,  &token2);
+					case '+': case '-': case '*': case '/':
+					case '&': case '|': case '^':
+						return do_assign(token,  &token2);
 					default: throw Exception("Expected ':', '=', or an operator", token2);
 				}
 			} else {
@@ -200,14 +214,14 @@ std::unique_ptr<Declaration> Parser::do_declare(const Token& ident) {
 	return declaration;
 }
 
-std::unique_ptr<Statement> Parser::do_assign(const Token& ident, Op op, const Token* op_token) {
+std::unique_ptr<Statement> Parser::do_assign(const Token& ident, const Token* op_token) {
 	std::unique_ptr<Statement> assignment(new Statement(ident, Statement::ASSIGNMENT));
-	if (op != Op::NOT) {
+	if (op_token != nullptr) {
 		// If it is an operator assignment (like +=) then the expression has the variable
 		// appended to the front and the operator appended to the back.
 		assignment->expr.emplace_back(new VarTok(ident));
 		do_expr(assignment->expr);
-		assignment->expr.emplace_back(new OpTok(*op_token, op));
+		assignment->expr.emplace_back(new FuncTok(*op_token, 2));
 	} else {
 		do_expr(assignment->expr);
 	}
@@ -272,7 +286,7 @@ std::unique_ptr<Break> Parser::do_break(const Token& kw) {
 }
 
 void Parser::do_expr(Expr& expr, const std::string& terminator) {
-	std::vector<Op> ops;
+	std::vector<Op*> ops;
 	std::vector<const Token*> tokens;
 	bool prev_was_op = true;
 	bool param_ready = false;
@@ -286,8 +300,8 @@ void Parser::do_expr(Expr& expr, const std::string& terminator) {
 		if (token.form == Token::END || token.str() == "}" || token.str() == terminator) {
 			// the expression has terminated
 			while (!ops.empty()) {
-				if (ops.back() == Op::TEMP_PAREN) throw Exception("Unclosed parenthesis", token);
-				expr.emplace_back(new OpTok(*tokens.back(), ops.back(), return_type(ops.back())));
+				if (ops.back() == &PAREN) throw Exception("Unclosed parenthesis", token);
+				expr.emplace_back(new FuncTok(*tokens.back(), ops.back()->num_params));
 				tokens.pop_back();
 				ops.pop_back();
 			}
@@ -313,12 +327,12 @@ void Parser::do_expr(Expr& expr, const std::string& terminator) {
 			} break;
 			case Token::IDENT:
 				if (peek().str() == "(") {
-					ops.push_back(Op::TEMP_FUNC);
+					ops.push_back(&FUNC);
 					tokens.push_back(&token);
 					num_parameters = 0;
 					param_ready = true;
 					next();
-					ops.push_back(Op::TEMP_PAREN);
+					ops.push_back(&PAREN);
 					tokens.push_back(nullptr);
 					prev_was_op = true;
 				} else {
@@ -331,29 +345,29 @@ void Parser::do_expr(Expr& expr, const std::string& terminator) {
 					prev_was_op = true;
 					while (true) {
 						if (ops.empty()) throw Exception("Mismatched parenthesis", token);
-						Op op = ops.back();
-						if (op == Op::TEMP_PAREN) {
+						Op* op = ops.back();
+						if (op == &PAREN) {
 							break;
 						} else {
-							expr.emplace_back(new OpTok(*tokens.back(), op, return_type(op)));
+							expr.emplace_back(new FuncTok(*tokens.back(), op->num_params));
 							ops.pop_back();
 							tokens.pop_back();
 						}
 					}
 					break;
 				} else if (token.str()[0] == '(') {
-					ops.push_back(Op::TEMP_PAREN);
+					ops.push_back(&PAREN);
 					tokens.push_back(nullptr);
 					prev_was_op = true;
 					break;
 				} else if (token.str()[0] == ')') {
 					while (true) {
 						if (ops.empty()) throw Exception("Mismatched parenthesis", token);
-						Op op = ops.back();
+						Op* op = ops.back();
 						ops.pop_back();
-						if (op == Op::TEMP_PAREN) {
+						if (op == &PAREN) {
 							tokens.pop_back();
-							if (!ops.empty() && ops.back() == Op::TEMP_FUNC) {
+							if (!ops.empty() && ops.back() == &FUNC) {
 								param_ready = false;
 								ops.pop_back();
 								expr.emplace_back(new FuncTok(*tokens.back(), num_parameters));
@@ -361,34 +375,34 @@ void Parser::do_expr(Expr& expr, const std::string& terminator) {
 							}
 							break;
 						} else {
-							expr.emplace_back(new OpTok(*tokens.back(), op, return_type(op)));
+							expr.emplace_back(new FuncTok(*tokens.back(), op->num_params));
 							tokens.pop_back();
 						}
 					}
 					break;
 				}
 
-				static std::unordered_map<std::string, Op> operators = {
-					{"+", Op::ADD}, {"-", Op::SUB}, {"*", Op::MUL}, {"/", Op::DIV}, {"%", Op::MOD},
-					{"<<", Op::LSH},{">>", Op::RSH},{"&", Op::BAND},{"|", Op::BOR}, {"^", Op::XOR},
-					{"==", Op::EQ}, {"!=", Op::NEQ},{"&&", Op::AND},{"||", Op::OR},
-					{"!", Op::NOT}, {">", Op::GT}, {"<", Op::LT}, {">=", Op::GEQ}, {"<=", Op::LEQ}
+				static std::unordered_map<std::string, Op*> operators = {
+					{"+", &ADD}, {"-", &SUB}, {"*", &MUL}, {"/", &DIV}, {"%", &MOD},
+					{"<<", &LSH},{">>", &RSH},{"&", &BAND},{"|", &BOR}, {"^", &XOR},
+					{"==", &EQ}, {"!=", &NEQ},{"&&", &AND},{"||", &OR},
+					{"!", &NOT}, {">", &GT}, {"<", &LT}, {">=", &GEQ}, {"<=", &LEQ}
 				};
 				auto iter = operators.find(token.str());
 				if (iter == operators.end()) throw Exception("Unexpected symbol", token);
-				Op op = iter->second;
-				if (op == Op::SUB && pwo) op = Op::NEG;
-				if (op == Op::DIV && pwo) op = Op::INV;
+				Op* op = iter->second;
+				if (op == &SUB && pwo) op = &NEG;
+				if (op == &DIV && pwo) op = &INV;
 				while (true) {
 					if (ops.empty()) break;
-					Op op2 = ops.back();
-					if (!((left_assoc(op) && precedence(op) <= precedence(op2)) ||
-					      (!left_assoc(op) && precedence(op) < precedence(op2)))) {
+					Op* op2 = ops.back();
+					if (!((op->left_assoc && op->precidence <= op2->precidence) ||
+					      (!op->left_assoc && op->precidence < op2->precidence))) {
 						break;
 					}
+					expr.emplace_back(new FuncTok(*tokens.back(), op2->num_params));
 					ops.pop_back();
 					tokens.pop_back();
-					expr.emplace_back(new OpTok(token, op2, return_type(op2)));
 				}
 				prev_was_op = true;
 				ops.push_back(op);
@@ -426,46 +440,6 @@ const Token& Parser::expect_ident() {
 	const Token& token = next();
 	if (token.form != Token::IDENT) throw Exception("Expected ident", token);
 	return token;
-}
-
-
-Type Parser::return_type(Op op) {
-	switch (op) {
-		case Op::NEG: case Op::ADD: case Op::MUL: case Op::MOD:
-		case Op::INV: case Op::SUB: case Op::DIV:
-		case Op::BAND: case Op::BOR: case Op::XOR: case Op::LSH: case Op::RSH:
-			return NUMBER;
-
-		case Op::NOT: case Op::AND: case Op::OR: case Op::EQ: case Op::NEQ:
-		case Op::GT: case Op::LT: case Op::GEQ: case Op::LEQ:
-			return Type(Prim::BOOL);
-
-		case Op::TEMP_PAREN: case Op::TEMP_FUNC:
-			assert(false);
-			return Type();
-	}
-}
-bool Parser::left_assoc(Op op) {
-	switch (op) {
-		case Op::NEG: case Op::INV: case Op::NOT: return false;
-		default: return true;
-	}
-}
-int Parser::precedence(Op op) {
-	switch (op) {
-		case Op::NEG: case Op::NOT: case Op::INV:             return 10;
-		case Op::MUL: case Op::DIV: case Op::MOD:             return  9;
-		case Op::ADD: case Op::SUB:                           return  8;
-		case Op::LSH: case Op::RSH:                           return  7;
-		case Op::LEQ: case Op::GEQ: case Op::LT: case Op::GT: return  6;
-		case Op::EQ:  case Op::NEQ:                           return  5;
-		case Op::BAND:                                        return  4;
-		case Op::XOR:                                         return  3;
-		case Op::BOR:                                         return  2;
-		case Op::AND:                                         return  1;
-		case Op::OR:                                          return  0;
-		case Op::TEMP_PAREN: case Op::TEMP_FUNC:              return -1;
-	}
 }
 
 void Parser::assert_simple_ident(const Token& ident) {

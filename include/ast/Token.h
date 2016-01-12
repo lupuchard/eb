@@ -21,7 +21,7 @@ struct Token {
 
 	int line, column;
 	Form form = NONE;
-	Type type = Type::invalid();
+	Type type = Type::Invalid;
 
 	inline const std::string& str() const {
 		assert(!str_list.empty());

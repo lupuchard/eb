@@ -5,6 +5,7 @@
 #include "Parser.h"
 #include "Builder.h"
 #include "Tree.h"
+#include "Std.h"
 #include <fstream>
 #include <atomic>
 
@@ -13,7 +14,7 @@ namespace llvm { class Module; }
 class Compiler {
 public:
 	Compiler(const std::string& filename, std::string out_build = "", std::string out_exec = "");
-	void initialize(const std::string& filename, bool force_recompile = false);
+	void initialize(const std::string& filename, bool force_recompile = true);
 
 private:
 	struct File {
@@ -42,6 +43,8 @@ private:
 	std::vector<Token> extra_tokens;
 	std::vector<std::unique_ptr<Function>> extra_functions;
 	std::vector<std::unique_ptr<Global>> extra_globals;
+
+	Std std;
 };
 
 

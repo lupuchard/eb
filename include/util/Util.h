@@ -45,4 +45,12 @@ inline std::string combine(const std::vector<std::string>& strs, std::string del
 	return res;
 }
 
+struct pairhash {
+	template <typename T, typename U>
+	std::size_t operator()(const std::pair<T, U> &x) const {
+		size_t hash1 = std::hash<T>()(x.first);
+		return hash1 ^ (x.second + 0x9e3779b9 + (hash1 << 6) + (hash1 >> 2));
+	}
+};
+
 #endif //EBC_UTIL_H

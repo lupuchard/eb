@@ -6,23 +6,10 @@
 #include <vector>
 #include <memory>
 
-enum class Op {
-	ADD, SUB, MUL, DIV, MOD, NEG, INV,
-	BAND, BOR, XOR, LSH, RSH,
-	NOT, AND, OR, GT, LT, GEQ, LEQ, EQ, NEQ,
-	TEMP_PAREN, TEMP_FUNC,
-};
-inline bool is_binary(Op op) {
-	switch (op) {
-		case Op::NEG: case Op::INV: case Op::NOT: return false;
-		default: return true;
-	}
-}
-
 struct Tok {
-	enum Form { INT, FLOAT, OP, VAR, FUNC, IF };
+	enum Form { INT, FLOAT, VAR, FUNC, IF };
 
-	Tok(const Token& token, Form form, Type type = Type()) :
+	Tok(const Token& token, Form form, Type type = Type::Invalid) :
 			token(&token), form(form), type(type) { }
 
 	virtual void _() const { }
@@ -34,7 +21,7 @@ struct Tok {
 
 struct IntTok: public Tok {
 	IntTok(const Token& token, uint64_t i, Type type): Tok(token, INT, type), i(i) { }
-	IntTok(const Token& token, bool b): Tok(token, INT, Type(Prim::BOOL)), i((uint64_t)b) { }
+	IntTok(const Token& token, bool b): Tok(token, INT, Type::Bool), i((uint64_t)b) { }
 	uint64_t i;
 };
 
@@ -43,15 +30,10 @@ struct FloatTok: public Tok {
 	double f;
 };
 
-struct OpTok: public Tok {
-	OpTok(const Token& token, Op op, Type type = Type()): Tok(token, OP, type), op(op) { }
-	Op op;
-};
-
 struct VarTok: public Tok {
 	VarTok(const Token& token): Tok(token, VAR) { }
 	Variable* var = nullptr;
-	bool external = true;
+	bool external = false;
 };
 
 typedef std::vector<std::unique_ptr<Tok>> Expr;

@@ -1,5 +1,5 @@
 
-/*fn simple(): I32 {
+fn simple(): I32 {
 	foo := 0;
     bar := 0;
     while foo < 5 {
@@ -18,7 +18,7 @@ fn breaks(): I32 {
 		}
 	}
 	return foo;
-}*/
+}
 
 fn mega_breaks(): I32 {
 	foo := 0;
@@ -40,7 +40,7 @@ fn mega_breaks(): I32 {
 	return dog;
 }
 
-/*fn continues(): I32 {
+fn continues(): I32 {
 	foo := 0;
 	bar := 0;
 	while foo < 5 {
@@ -49,21 +49,21 @@ fn mega_breaks(): I32 {
 		bar += foo;
 	}
 	return bar;
-}*/
+}
 
 fn main(): I32 {
-	//if simple() != 10 {
-	//	return 1;
-	//}
-	//if breaks() != 2 {
-	//	return 2;
-	//}
+	if simple() != 10 {
+		return 1;
+	}
+	if breaks() != 2 {
+		return 2;
+	}
 	if mega_breaks() != 24 {
 		return 3;
 	}
-	//if continues() != 9 {
-	//	return 4;
-	//}
+	if continues() != 9 {
+		return 4;
+	}
 	return 0;
 }
 // CRASHES WHEN infinite loop?

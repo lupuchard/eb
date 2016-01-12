@@ -4,48 +4,55 @@
 #include "Util.h"
 #include <string>
 #include <set>
+#include <memory>
 
-enum class Prim {
-	UNKNOWN, VOID, BOOL,
-	I8, I16, I32, I64, U8, U16, U32, U64, F32, F64,
-};
+class BaseType;
 
 class Type {
 public:
-	Type();
-	Type(Prim prim);
-	Type(const std::set<Prim>& prims);
-	static Type invalid();
+	enum Form {
+		Invalid,
+		Void,                // for empty returns
+		Bool,                // either true or false
+		STRUCT, ENUM, TUPLE, // not exist yet
+		IntLit,              // unspecified int literal, can implicitly cast to any numeric type
+		Int,                 // int_fast32_t
+		U8, U16, U32, U64,   // x-bit unsigned int
+		I8, I16, I32, I64,   // x-bit signed int
+		UPtr, IPtr,          // pointer-sized ints
+		F32, F64,            // x-bit floating point
+		Float                // long double
+	};
+	Type(Form form);
+	static Type parse(const std::string& str);
 
-	void add(Prim prim);
-	void complete();
+	bool is_number() const;
+	bool is_int() const;
+	bool is_signed() const;
+	bool is_float() const;
 
-	Type merge(const Type& other) const;
-	Type both(const Type& other) const;
-
-	bool is_known() const;
-	bool is_valid() const;
-	bool has(Prim prim) const;
-	size_t size() const;
-	Prim get() const;
-
-	static Type parse(const std::string& name);
 	std::string to_string() const;
 
-	inline bool operator==(const Type& rhs) const {
-		return possible == rhs.possible;
-	}
+	bool operator==(const Type& other) const;
+	inline bool operator!=(const Type& other) const { return !operator==(other); }
+	bool operator<(const Type& other) const;
+
+	operator Form() const;
+	bool operator==(Form other) const;
+	inline bool operator!=(Form other) const { return !operator==(other); }
+
+	size_t hash() const;
 
 private:
-	std::set<Prim> possible;
+	Form form;
 };
-inline bool operator!=(const Type& lhs, const Type& rhs) {
-	return !lhs.operator==(rhs);
-}
 
-const Type SIGNED   = Type(std::set<Prim> {Prim::I8, Prim::I16, Prim::I32, Prim::I64});
-const Type UNSIGNED = Type(std::set<Prim> {Prim::U8, Prim::U16, Prim::U32, Prim::U64});
-const Type FLOAT    = Type(std::set<Prim> {Prim::F32, Prim::F64});
-const Type NUMBER   = FLOAT.both(SIGNED.both(UNSIGNED));
+namespace std  {
+	template<> struct hash<Type> {
+		size_t operator() (const Type& x) const {
+			return x.hash();
+		}
+	};
+}
 
 #endif //EBC_TYPES_H

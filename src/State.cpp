@@ -10,10 +10,7 @@ Scope& Scope::to_subscope(Block& block) {
 		return *children.back();
 	}
 	Scope& subscope = *iter->second;
-	for (auto& var_entry : subscope.variables) {
-		var_entry.second.first = var_entry.second.second[0].is_param ? 0 : -1;
-	}
-	return subscope;
+	return *iter->second;
 }
 
 Scope* Scope::get_parent() {
@@ -34,22 +31,12 @@ void Scope::create_loop() {
 	loop.reset(new Loop());
 }
 
-Variable& Scope::declare(std::string name, Type type) {
-	auto iter = variables.find(name);
-	if (iter != variables.end()) {
-		iter->second.first++;
-		iter->second.second.emplace_back(type);
-		return iter->second.second[iter->second.first];
-	}
-	variables[name] = std::pair<int, std::vector<Variable>>(0, {Variable(type)});
-	return variables[name].second[0];
+Variable* Scope::declare(std::string name, Type type) {
+	if (variables.count(name)) return nullptr;
+	variables[name] = Variable(type);
+	return &variables[name];
 }
 
-Variable& Scope::next(const std::string& name) {
-	auto& entry = variables[name];
-	entry.first++;
-	return entry.second[entry.first];
-}
 
 Variable* Scope::get(const std::string& name) {
 	auto iter = variables.find(name);
@@ -57,8 +44,7 @@ Variable* Scope::get(const std::string& name) {
 		if (parent == nullptr) return nullptr;
 		return parent->get(name);
 	}
-	assert(iter->second.first > -1);
-	return &iter->second.second[iter->second.first];
+	return &iter->second;
 }
 
 State::State(Module& module): module(&module) {
@@ -76,7 +62,7 @@ void State::ascend() {
 	current_scope = current_scope->get_parent();
 }
 
-Variable& State::declare(std::string name, Type type) {
+Variable* State::declare(std::string name, Type type) {
 	return current_scope->declare(name, type);
 }
 Variable* State::get_var(const std::string& name) const {
@@ -87,9 +73,6 @@ Variable* State::get_var(const std::string& name) const {
 		return &global->var;
 	}
 	return var;
-}
-Variable& State::next_var(const std::string& name) {
-	return current_scope->next(name);
 }
 
 void State::set_func(Function& func) {

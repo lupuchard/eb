@@ -4,15 +4,18 @@
 #include "ast/Module.h"
 #include "State.h"
 #include "ast/Statement.h"
+#include "Std.h"
 
 class TypeChecker {
 public:
+	TypeChecker(Std& std);
 	void check(Module& module, State& state);
-	void check(Block& block, State& state);
-	Type type_of(Expr& expr, State& state, const Token& token);
 
 private:
-	Type merge_stack(std::vector<Type*>& stack, int num, Type type, const Token& token);
+	void check(Block& block, State& state);
+	Type check(Expr* expr, State& state, const Token& token, Type res = Type::Invalid);
+
+	Std& std;
 };
 
 

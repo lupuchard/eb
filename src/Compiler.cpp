@@ -1,8 +1,8 @@
+#include <passes/LoopChecker.h>
 #include "Compiler.h"
 #include "passes/Circuiter.h"
 #include "passes/ReturnChecker.h"
 #include "passes/TypeChecker.h"
-#include "passes/Completer.h"
 #include "Filesystem.h"
 
 Compiler::Compiler(const std::string& filename, std::string out_build, std::string out_exec)
@@ -54,20 +54,17 @@ void Compiler::compile(File& file) {
 
 	State state(file.module);
 
-	// Resolve dependencies
+	// checks loops & if the breaks/continues are valid
+	LoopChecker loop_checker;
+	loop_checker.check(file.module, state);
+
+	// resolve dependencies
+	std.add_operators(file.module);
 	resolve(file.module, state);
 
-	// Infers as much type information as possible.
-	// Fails if any types don't match.
-	// Also checks validity of breaks/continues for some reason.
-	TypeChecker type_checker;
+	// infers and checks all the types & finishes resolving functions
+	TypeChecker type_checker(std);
 	type_checker.check(file.module, state);
-
-	// Numerically ambiguous variables are set to either I32 or F64.
-	// Fails if any types are still unknown.
-	// Ambiguous literals are fixed.
-	Completer completer;
-	completer.complete(file.module, state);
 
 	Builder builder;
 	builder.build(file.module, state, file.out_filename);
@@ -93,7 +90,7 @@ void Compiler::initialize(const std::string& filename, bool force_recompile) {
 	for (auto& str : file->module.name) {
 		out_filename += str + "-";
 	}
-	out_filename += ".bc";
+	out_filename += ".ll";
 	file->out_filename = concat_paths(out_build, out_filename);
 
 	if (!force_recompile && last_modified(filename) < last_modified(file->out_filename + ".o")) {
@@ -147,7 +144,7 @@ void Compiler::resolve(Module& module, State& state) {
 				state.descend(func.block);
 				state.set_func(func);
 				for (size_t j = 0; j < func.param_names.size(); j++) {
-					state.declare(func.param_names[j]->str(), func.param_types[j]).is_param = true;
+					state.declare(func.param_names[j]->str(), func.param_types[j])->is_param = true;
 				}
 				resolve(module, func.block, state);
 				state.ascend();
@@ -163,7 +160,7 @@ void Compiler::resolve(Module& module, const Block& block, State& state) {
 			case Statement::DECLARATION: {
 				Declaration& decl = (Declaration&)statement;
 				if (decl.type_token == nullptr) {
-					state.declare(statement.token.str(), Type());
+					state.declare(statement.token.str(), Type::Invalid);
 				} else {
 					state.declare(statement.token.str(), Type::parse(decl.type_token->str()));
 				}
@@ -182,7 +179,7 @@ void Compiler::resolve(Module& module, const Expr& expr, State& state) {
 	for (size_t i = 0; i < expr.size(); i++) {
 		Tok& tok = *expr[i];
 		if (tok.token->ident().size() > 1) {
-			// if identifier length is 1, it's assumed to be within this module
+			// if identifier length not 1, it's assumed to not be in this module
 			auto vec = tok.token->ident();
 			vec.pop_back();
 			Module* mod = module.search(vec);
@@ -192,13 +189,21 @@ void Compiler::resolve(Module& module, const Expr& expr, State& state) {
 			if (tok.form == Tok::VAR) {
 				Global* global = mod->get_global(tok.token->ident().back());
 				if (global == nullptr) throw Exception("Couldn't resolve ident", *tok.token);
+				if (!global->pub) throw Exception("Can't access private global", *tok.token);
 				((VarTok&)tok).var = &global->var;
 				((VarTok&)tok).external = true;
 				module.external_globals.push_back(global);
 			} else if (tok.form == Tok::FUNC) {
 				FuncTok& ftok = (FuncTok&)tok;
 				auto& funcs = mod->get_functions(ftok.num_params, tok.token->ident().back());
-				ftok.possible_funcs = funcs;
+				std::vector<Function*> possible_funcs;
+				for (Function* func : funcs) {
+					if (func->pub) {
+						possible_funcs.push_back(func);
+						module.external_functions.push_back(func);
+					}
+				}
+				ftok.possible_funcs = possible_funcs;
 				ftok.external = true;
 			}
 		} else if (tok.form == Tok::VAR) {
@@ -232,14 +237,35 @@ Module& Compiler::import(Module& module, const std::vector<std::string>& name, c
 // [num globals, 4]{(const, name, type)...}
 // Type:
 // [primitive, 1]
-void write_type(std::ofstream& out, Type& type) {
-	Prim prim = type.get();
-	out.write((char*)&prim, 1);
+// S, T, E: (structure, tuple, enum)
+// *, &, +, ^: references
+void write_type(std::ofstream& out, Type type) {
+	std::unordered_map<Type, char> types = {
+			{Type::Void, 'v'}, {Type::Bool, 'b'}, {Type::IPtr, 'p'}, {Type::UPtr, 'u'},
+			{Type::I8, 'c'}, {Type::I16, 's'}, {Type::I32, 'i'}, {Type::I32, 'l'},
+			{Type::U8, '1'}, {Type::U16, '2'}, {Type::U32, '4'}, {Type::U64, '8'},
+			{Type::Int, 'I'}, {Type::F32, 'f'}, {Type::F64, 'd'}, {Type::Float, 'F'}
+	};
+	auto iter = types.find(type);
+	if (iter == types.end()) {
+		static char invalid = '!';
+		out.write(&invalid, 1);
+		return;
+	}
+	out.write(&iter->second, 1);
 }
 Type read_type(std::ifstream& in) {
-	Prim prim;
-	in.read((char*)&prim, 1);
-	return Type(prim);
+	std::unordered_map<char, Type> types = {
+			{'v', Type::Void}, {'b', Type::Bool}, {'p', Type::IPtr}, {'u', Type::UPtr},
+			{'c', Type::I8}, {'s', Type::I16}, {'i', Type::I32}, {'l', Type::I32},
+			{'1', Type::U8}, {'2', Type::U16}, {'4', Type::U32}, {'8', Type::U64},
+			{'I', Type::Int}, {'f', Type::F32}, {'d', Type::F64}, {'F', Type::Float}
+	};
+	char c;
+	in.read(&c, 1);
+	auto iter = types.find(c);
+	assert(iter != types.end());
+	return iter->second;
 }
 void Compiler::create_obj_file(File& file) {
 	std::ifstream in(file.out_filename, std::ifstream::ate | std::ifstream::binary);

@@ -14,7 +14,9 @@ struct Item {
 
 struct Global: public Item {
 	Global(const Token& token, Type type, bool conzt):
-			token(token), var(type), conzt(conzt), Item(GLOBAL) { }
+			token(token), var(type), conzt(conzt), Item(GLOBAL) {
+		var.is_const = conzt;
+	}
 	const Token& token;
 	Variable var;
 	bool conzt;
@@ -30,30 +32,16 @@ struct Import: public Item {
 struct Function: public Item {
 	Function(const Token& token): token(token), Item(FUNCTION) { }
 
-	inline bool allows(const std::vector<Type*>& arguments) {
-		for (size_t i = 0; i < arguments.size(); i++) {
-			if (!arguments[i]->has(param_types[i].get())) {
-				return false;
-			}
-		}
-		return true;
-	}
-	inline bool allows(const std::vector<Type>& arguments) {
-		for (size_t i = 0; i < arguments.size(); i++) {
-			if (!arguments[i].has(param_types[i].get())) {
-				return false;
-			}
-		}
-		return true;
-	}
-
 	const Token& token;
 	Block block;
-	Type return_type = Type(Prim::VOID);
+	Type return_type = Type::Void;
 	int index = 0;
 	std::vector<Type> param_types;
 	std::vector<const Token*> param_names;
 	std::string unique_name;
+
+	enum Form { USER, OP, CAST };
+	Form form = USER;
 };
 struct FuncTok: public Tok {
 	FuncTok(const Token& token, int num_params): Tok(token, FUNC), num_params(num_params) { }

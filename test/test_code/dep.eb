@@ -1,4 +1,4 @@
 
-fn spooks(): I32 {
+pub fn spooks(): I32 {
 	return 8
 }

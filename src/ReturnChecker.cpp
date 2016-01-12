@@ -8,7 +8,7 @@ void ReturnChecker::check(Module& module) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
 				create_drops(&func.block);
-				if (func.return_type.get() != Prim::VOID) {
+				if (func.return_type != Type::Void) {
 					if (!check(func.block)) {
 						create_implicit_returns(func.block);
 					}

@@ -192,14 +192,14 @@ void Tokenizer::parse_num(Token& token) {
 void Tokenizer::parse_float(Token& token, const std::string& str) {
 
 	// parse type
+	token.type = Type::Float;
 	size_t end_pos = token.str().find('f');
 	if (end_pos != std::string::npos) {
 		std::string end = token.str().substr(end_pos);
-		if      (end == "f32") token.type.add(Prim::F32);
-		else if (end == "f64") token.type.add(Prim::F64);
+		if      (end == "f32") token.type = Type::F32;
+		else if (end == "f64") token.type = Type::F64;
 		else if (end != "f") throw Exception("Invalid fp suffix", token);
 	}
-	if (!token.type.is_valid()) token.type = FLOAT;
 
 	// parse value
 	std::string body = token.str().substr(0, end_pos);
@@ -210,9 +210,9 @@ void Tokenizer::parse_float(Token& token, const std::string& str) {
 	try {
 		token.set_flt(std::stod(token.str()));
 	} catch (std::invalid_argument ex) {
-		throw Exception("Invalid float.", token);
+		throw Exception("Invalid float", token);
 	} catch (std::out_of_range ex) {
-		throw Exception("Out of float range.", token);
+		throw Exception("Out of float range", token);
 	}
 }
 
@@ -245,23 +245,22 @@ void Tokenizer::parse_int(Token& token, const std::string& str) {
 	size_t end_pos = token.str().find('i');
 	if (end_pos != std::string::npos) {
 		std::string end = token.str().substr(end_pos);
-		if      (end == "i8")  token.type.add(Prim::I8);
-		else if (end == "i16") token.type.add(Prim::I16);
-		else if (end == "i32") token.type.add(Prim::I32);
-		else if (end == "i64") token.type.add(Prim::I64);
-		else if (end != "i") throw Exception("Invalid integral suffix", token);
-		else token.type = SIGNED;
+		if      (end == "i8")  token.type = Type::I8;
+		else if (end == "i16") token.type = Type::I16;
+		else if (end == "i32") token.type = Type::I32;
+		else if (end == "i64") token.type = Type::I64;
+		else if (end == "i")   token.type = Type::Int;
+		else throw Exception("Invalid integral suffix", token);
 	} else {
 		end_pos = token.str().find('u');
 		if (end_pos != std::string::npos) {
 			std::string end = token.str().substr(end_pos);
-			if      (end == "u8")  token.type.add(Prim::U8);
-			else if (end == "u16") token.type.add(Prim::U16);
-			else if (end == "u32") token.type.add(Prim::U32);
-			else if (end == "u64") token.type.add(Prim::U64);
-			else if (end != "u") throw Exception("Invalid integral suffix", token);
-			else token.type = UNSIGNED;
-		} else token.type = NUMBER;
+			if      (end == "u8")  token.type = Type::U8;
+			else if (end == "u16") token.type = Type::U16;
+			else if (end == "u32") token.type = Type::U32;
+			else if (end == "u64") token.type = Type::U64;
+			else throw Exception("Invalid integral suffix", token);
+		} else token.type = Type::IntLit;
 	}
 
 	// parse value
@@ -270,8 +269,8 @@ void Tokenizer::parse_int(Token& token, const std::string& str) {
 	try {
 		token.set_int(std::stoull(body, 0, base));
 	} catch (std::invalid_argument ex) {
-		throw Exception("Invalid integer.", token);
+		throw Exception("Invalid integer", token);
 	} catch (std::out_of_range ex) {
-		throw Exception("Out of integer range.", token);
+		throw Exception("Out of integer range", token);
 	}
 }

@@ -40,13 +40,10 @@ void Circuiter::shorten(Expr& expr) {
 				range_stack.push_back(std::make_pair(j, j + 1));
 				shorten(((IfTok&)tok).if_statement->expr);
 			} break;
-			case Tok::FUNC:
-				merge(has_side_fx_stack, stack, range_stack, ((FuncTok&)tok).num_params, true, j);
-				stack.back().push_back(&expr[j]);
-				break;
-			case Tok::OP: {
-				Op op = ((OpTok&)tok).op;
-				if ((op == Op::AND || op == Op::OR) && has_side_fx_stack.back()) {
+			case Tok::FUNC: {
+				FuncTok& ftok = (FuncTok&)tok;
+				const std::string& name = ftok.token->str();
+				if ((name == "&&" || name == "||") && has_side_fx_stack.back()) {
 					// a || b  -->  if  a { true  } else { b }
 					// a && b  -->  if !a { false } else { b }
 					new_if = new If(*tok.token);
@@ -55,9 +52,11 @@ void Circuiter::shorten(Expr& expr) {
 						new_if->expr.emplace_back();
 						new_if->expr.back().swap(*cond[i]);
 					}
-					if (op == Op::AND) new_if->expr.emplace_back(new OpTok(*tok.token, Op::NOT));
+					Token* anot = new Token(Token::SYMBOL, "!", tok.token->line, tok.token->column);
+					artificial_nots.push_back(std::unique_ptr<Token>(anot));
+					if (name == "&&") new_if->expr.emplace_back(new FuncTok(*anot, 1));
 					new_if->true_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
-					new_if->true_block[0]->expr.emplace_back(new IntTok(*tok.token, op == Op::OR));
+					new_if->true_block[0]->expr.emplace_back(new IntTok(*tok.token, name == "||"));
 					auto& else_expr = stack[stack.size() - 1];
 					new_if->else_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
 					for (size_t i = 0; i < else_expr.size(); i++) {
@@ -67,13 +66,10 @@ void Circuiter::shorten(Expr& expr) {
 					merge(has_side_fx_stack, stack, range_stack, 2, true, j);
 					new_if_token = tok.token;
 					goto end_loop;
-				} else if (is_binary(op)) {
-					merge(has_side_fx_stack, stack, range_stack, 2, false, j);
-					stack.back().push_back(&expr[j]);
-				} else {
-					merge(has_side_fx_stack, stack, range_stack, 1, false, j);
-					stack.back().push_back(&expr[j]);
 				}
+				merge(has_side_fx_stack, stack, range_stack, ftok.num_params,
+				      /* hack to test if not operator */ ftok.token->form != Token::SYMBOL, j);
+				stack.back().push_back(&expr[j]);
 			} break;
 		}
 	}

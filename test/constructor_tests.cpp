@@ -1,6 +1,5 @@
 #include <Tokenizer.h>
 #include "Parser.h"
-#include <iostream>
 #include "catch.hpp"
 
 TEST_CASE("function", "[constructor]") {
@@ -13,8 +12,8 @@ TEST_CASE("function", "[constructor]") {
 	Function& function = dynamic_cast<Function&>(mod[0]);
 	REQUIRE(function.param_types.size() == 2);
 	REQUIRE(function.param_names[0]->str() == "a");
-	REQUIRE(function.param_types[1].get() == Prim::F64);
-	REQUIRE(function.return_type.get() == Prim::BOOL);
+	REQUIRE(function.param_types[1] == Type::F64);
+	REQUIRE(function.return_type == Type::Bool);
 }
 
 TEST_CASE("assignment", "[constructor]") {
@@ -39,7 +38,7 @@ TEST_CASE("assignment", "[constructor]") {
 	REQUIRE(expr.size() == 5);
 	REQUIRE(expr[0]->form == Tok::VAR);
 	REQUIRE(expr[0]->token == &assignment2.token);
-	REQUIRE(((OpTok&)*expr.back()).op == Op::ADD);
+	REQUIRE(expr.back()->form == Tok::FUNC);
 }
 
 TEST_CASE("declaration", "[constructor]") {
@@ -79,21 +78,21 @@ TEST_CASE("expression", "[constructor]") {
 	REQUIRE(((IntTok&)*expr1[0]).i  == 5);
 	REQUIRE(((IntTok&)*expr1[1]).i  == 4);
 	REQUIRE(((IntTok&)*expr1[2]).i  == 3);
-	REQUIRE( ((OpTok&)*expr1[3]).op == Op::NEG);
+	REQUIRE(expr1[3]->token->str() == "-");
 	REQUIRE(((IntTok&)*expr1[4]).i  == 2);
-	REQUIRE( ((OpTok&)*expr1[5]).op == Op::ADD);
-	REQUIRE( ((OpTok&)*expr1[6]).op == Op::MUL);
+	REQUIRE(expr1[5]->token->str() == "+");
+	REQUIRE(expr1[6]->token->str() == "*");
 	REQUIRE(((IntTok&)*expr1[7]).i  == 1);
-	REQUIRE( ((OpTok&)*expr1[8]).op == Op::DIV);
-	REQUIRE( ((OpTok&)*expr1[9]).op == Op::SUB);
+	REQUIRE(expr1[8]->token->str() == "/");
+	REQUIRE(expr1[9]->token->str() == "-");
 
 	Expr& expr2 = block[1]->expr;
 	REQUIRE(expr2.size() == 5);
 	REQUIRE(((IntTok&)*expr2[0]).i  == 1);
 	REQUIRE(((IntTok&)*expr2[1]).i  == 3);
 	REQUIRE(((IntTok&)*expr2[2]).i  == 4);
-	REQUIRE( ((OpTok&)*expr2[3]).op == Op::LEQ);
-	REQUIRE( ((OpTok&)*expr2[4]).op == Op::AND);
+	REQUIRE(expr2[3]->token->str() == "<=");
+	REQUIRE(expr2[4]->token->str() == "&&");
 }
 
 TEST_CASE("function call", "[constructor]") {
@@ -127,9 +126,9 @@ TEST_CASE("if", "[constructor]") {
 
 	REQUIRE(block.size() == 1);
 	If& if_statement = dynamic_cast<If&>(*block[0]);
-	REQUIRE(((OpTok&)  *if_statement.expr[2]).op == Op::LT);
+	REQUIRE(if_statement.expr[2]->token->str() == "<");
 	If& elif_statement = dynamic_cast<If&>(*if_statement.else_block[0]);
-	REQUIRE(((OpTok&)*elif_statement.expr[2]).op == Op::GT);
+	REQUIRE(elif_statement.expr[2]->token->str() == ">");
 
 	REQUIRE(  if_statement.true_block[0]->token.str() == "x");
 	REQUIRE(elif_statement.true_block[0]->token.str() == "y");

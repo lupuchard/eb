@@ -20,9 +20,8 @@ public:
 	Scope& to_subscope(Block& block);
 	Scope* get_parent();
 
-	Variable& declare(std::string name, Type type);
+	Variable* declare(std::string name, Type type);
 	Variable* get(const std::string& name);
-	Variable& next(const std::string& name);
 
 	Loop* get_loop(int amount);
 	void create_loop();
@@ -32,7 +31,7 @@ private:
 	std::vector<std::unique_ptr<Scope>> children;
 	std::unordered_map<Block*, Scope*> children_map;
 
-	std::unordered_map<std::string, std::pair<int, std::vector<Variable>>> variables;
+	std::unordered_map<std::string, Variable> variables;
 	std::unique_ptr<Loop> loop;
 };
 
@@ -45,9 +44,8 @@ public:
 	void descend(Block& block);
 	void ascend();
 
-	Variable& declare(std::string name, Type type);
+	Variable* declare(std::string name, Type type);
 	Variable* get_var(const std::string& name) const;
-	Variable& next_var(const std::string& name);
 
 	void set_func(Function& func);
 	Function& get_func() const;

@@ -3,7 +3,6 @@
 
 #include "Item.h"
 #include "Tree.h"
-#include <map>
 
 class Module {
 public:
@@ -33,7 +32,7 @@ private:
 	std::vector<std::unique_ptr<Item>> items;
 
 	// map of (name, num parameters) to a list of functions
-	std::map<std::pair<std::string, int>, std::vector<Function*>> functions;
+	std::unordered_map<std::pair<std::string, int>, std::vector<Function*>, pairhash> functions;
 	std::vector<Function*> pub_functions;
 	std::unordered_map<std::string, Global*> globals;
 	std::vector<Global*> pub_globals;
