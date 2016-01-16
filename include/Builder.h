@@ -17,14 +17,18 @@ private:
 	llvm::Value* do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& state);
 	llvm::Value* do_op(llvm::IRBuilder<>& builder, Function& op, std::vector<llvm::Value*>& args);
 	llvm::Value* do_cast(llvm::IRBuilder<>& builder, Function& cast, llvm::Value* arg);
+	llvm::Value* do_constructor(llvm::IRBuilder<>& builder, Struct& strukt,
+	                            std::vector<llvm::Value*>& args);
 
 	llvm::BasicBlock* create_basic_block(std::string name);
 	llvm::Type* type_to_llvm(Type& type);
+	llvm::Constant* value_to_llvm(Value& value);
 	llvm::Constant* default_value(Type& type, llvm::Type* llvm_type);
 
 	llvm::LLVMContext* c;
 	llvm::Function* llvm_func;
 	std::unordered_map<const Function*, llvm::Constant*> llvm_functions;
+	std::unordered_map<const Struct*, llvm::StructType*> llvm_structs;
 };
 
 

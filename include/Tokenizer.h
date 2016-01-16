@@ -2,7 +2,7 @@
 #define EBC_TOKENIZER_H
 
 #include "ast/Token.h"
-#include "Exception.h"
+#include "Except.h"
 #include <vector>
 #include <stdexcept>
 #include <fstream>

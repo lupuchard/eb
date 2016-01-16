@@ -1,5 +1,6 @@
 #include "passes/TypeChecker.h"
-#include "Exception.h"
+#include "Except.h"
+#include <algorithm>
 
 TypeChecker::TypeChecker(Std& std): std(std) { }
 
@@ -10,54 +11,62 @@ void TypeChecker::check(Module& module, State& state) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
 				state.set_func(func);
-				check(func.block, state);
+				check(module, func.block, state);
 			} break;
 			default: break;
 		}
 	}
 }
 
-void TypeChecker::check(Block& block, State& state) {
+void TypeChecker::check(Module& mod, Block& block, State& state) {
 	state.descend(block);
 	for (size_t i = 0; i < block.size(); i++) {
 		Statement& statement = *block[i];
-		const Token& token = statement.token;
 		switch (statement.form) {
 			case Statement::DECLARATION: {
 				Declaration& decl = (Declaration&)statement;
 				Variable& var = *state.get_var(decl.token.str());
 				if (!decl.expr.empty()) {
-					var.type = check(&decl.expr, state, decl.token, var.type);
+					var.type = check(mod, &decl.expr, state, decl.token, var.type);
 				}
 			} break;
 			case Statement::ASSIGNMENT: {
-				Variable* var = state.get_var(statement.token.str());
+				Assignment& assign = dynamic_cast<Assignment&>(statement);
+				Variable* var = state.get_var(assign.token.str());
 				if (var == nullptr) {
-					throw Exception("No variable of this name found", statement.token);
+					throw Except("No variable of this name found", assign.token);
 				} else if (var->is_param) {
-					throw Exception("You may not assign to parameters", statement.token);
+					throw Except("You may not assign to parameters", assign.token);
 				} else if (var->is_const) {
-					throw Exception("You may not assign to const globals", statement.token);
+					throw Except("You may not assign to const globals", assign.token);
 				}
-				var->type = check(&statement.expr, state, statement.token, var->type);
+				Type type = var->type;
+				for (size_t j = 0; j < assign.accesses.size(); j++) {
+					AccessTok& access = *assign.accesses[j];
+					if (!type.is_struct()) throw Except("Can only access structs", assign.token);
+					access.idx = type.strukt->member_map[access.name];
+					type = type.strukt->member_types[access.idx];
+				}
+				type = check(mod, &statement.expr, state, statement.token, type);
+				if (assign.accesses.empty()) var->type = type;
 			} break;
 			case Statement::EXPR: {
-				check(&statement.expr, state, statement.token);
+				check(mod, &statement.expr, state, statement.token);
 			} break;
 			case Statement::RETURN: {
 				if (state.get_func().return_type == Type::Void) break;
-				check(&statement.expr, state, statement.token, state.get_func().return_type);
+				check(mod, &statement.expr, state, statement.token, state.get_func().return_type);
 			} break;
 			case Statement::IF: {
 				If& if_statement = (If&)statement;
-				check(&statement.expr, state, statement.token, Type::Bool);
-				check(if_statement.true_block, state);
-				check(if_statement.else_block, state);
+				check(mod, &statement.expr, state, statement.token, Type::Bool);
+				check(mod, if_statement.true_block, state);
+				check(mod, if_statement.else_block, state);
 			} break;
 			case Statement::WHILE: {
 				While& while_statement = (While&)statement;
-				check(&statement.expr, state, statement.token, Type::Bool);
-				check(while_statement.block, state);
+				check(mod, &statement.expr, state, statement.token, Type::Bool);
+				check(mod, while_statement.block, state);
 			} break;
 			default: break;
 		}
@@ -65,94 +74,126 @@ void TypeChecker::check(Block& block, State& state) {
 	state.ascend();
 }
 
-Type TypeChecker::check(Expr* expr, State& state, const Token& token, Type res) {
+Type TypeChecker::check(Module& mod, Expr* expr, State& state, const Token& token, Type res) {
+	// implicit casts to be inserted
 	std::map<Tok*, Tok*> insertions;
+
+	// evaluation stack
 	std::vector<Type> stack;
 	std::vector<Tok*> tok_stack;
+
 	for (size_t j = 0; j < expr->size(); j++) {
 		Tok& tok = *(*expr)[j];
-		if (tok.form == Tok::VAR) {
-			stack.push_back(((VarTok&)tok).var->type);
-		} else if (tok.form == Tok::FUNC) {
-			FuncTok& ftok = (FuncTok&)tok;
-			if (ftok.possible_funcs.empty()) throw Exception("Function not found", *tok.token);
+		switch (tok.form) {
+			case Tok::VAR:   stack.push_back(((VarTok&)tok).var->type);    break;
+			case Tok::VALUE: stack.push_back(((ValueTok&)tok).value.type); break;
+			case Tok::ACCESS: {
+				AccessTok& atok = (AccessTok&)tok;
+				if (!stack.back().is_struct()) {
+					throw Except("Cannot access on non-structure type", *tok.token);
+				}
+				Struct& strukt = *stack.back().strukt;
+				auto it = strukt.member_map.find(atok.name);
+				if (it == strukt.member_map.end()) throw Except("Member not found", *tok.token);
+				atok.idx = it->second;
+				stack.back() = strukt.member_types[atok.idx];
+				tok_stack.pop_back();
+			} break;
+			case Tok::FUNC: {
+				FuncTok& ftok = (FuncTok&)tok;
+				if (ftok.possible_funcs.empty()) throw Except("Function not found", *tok.token);
 
-			std::vector<Type> args(    stack.end() - ftok.num_params,     stack.end());
-			std::vector<Tok*> toks(tok_stack.end() - ftok.num_params, tok_stack.end());
-			stack.erase(        stack.end() - ftok.num_params,     stack.end());
-			tok_stack.erase(tok_stack.end() - ftok.num_params, tok_stack.end());
+				std::vector<Type> args(    stack.end() - ftok.num_args,     stack.end());
+				std::vector<Tok*> toks(tok_stack.end() - ftok.num_args, tok_stack.end());
+				stack.erase(        stack.end() - ftok.num_args,     stack.end());
+				tok_stack.erase(tok_stack.end() - ftok.num_args, tok_stack.end());
 
-			int min_num_casts = 255;
-			std::vector<Function*> valid_funcs;
-			for (Function* func : ftok.possible_funcs) {
-				bool match = true;
-				int num_casts = 0;
-				for (size_t i = 0; i < ftok.num_params; i++) {
-					Type& param = func->param_types[i];
-					if (param == args[i]) continue;
-					if (std.get_cast(args[i], param) != nullptr) {
-						num_casts++;
-						if (num_casts > min_num_casts) {
-							match = false;
-							break;
+				// function overloading means there are multiple choices
+				// this chooses the function that requires the fewest implicit casts to reach
+				int min_num_casts = 255;
+				std::vector<Function*> valid_funcs;
+				for (Function* func : ftok.possible_funcs) {
+					bool match = true;
+					int num_casts = 0;
+					for (size_t i = 0; i < ftok.num_unnamed_args; i++) {
+						Type& param = func->param_types[i];
+						if (param == args[i]) continue;
+						if (std.get_cast(args[i], param) != nullptr) {
+							num_casts++;
+							if (num_casts > min_num_casts) {
+								match = false;
+								break;
+							}
+							continue;
 						}
-						continue;
+						match = false;
+						break;
 					}
-					match = false;
-					break;
-				}
-				if (match) {
-					if (num_casts < min_num_casts) {
-						valid_funcs.clear();
-						min_num_casts = num_casts;
+					if (match) {
+						if (num_casts < min_num_casts) {
+							valid_funcs.clear();
+							min_num_casts = num_casts;
+						}
+						valid_funcs.push_back(func);
 					}
-					valid_funcs.push_back(func);
 				}
-			}
 
-			if (valid_funcs.empty()) {
-				throw Exception("Arguments match no function", *tok.token);
-			} else if (valid_funcs.size() > 1) {
-				throw Exception("Function call is ambiguous", *tok.token);
-			}
-
-			for (size_t i = 0; i < ftok.num_params; i++) {
-				Type& param = valid_funcs[0]->param_types[i];
-				if (valid_funcs[0]->param_types[i] != args[i]) {
-					FuncTok* new_ftok = new FuncTok(token, 1);
-					assert(std.get_cast(args[i], param) != nullptr);
-					new_ftok->possible_funcs.push_back(std.get_cast(args[i], param));
-					insertions[toks[i]] = new_ftok;
+				if (valid_funcs.empty()) {
+					throw Except("Arguments match no function", *tok.token);
+				} else if (valid_funcs.size() > 1) {
+					if (valid_funcs[0]->form == Function::OP && valid_funcs.size() == 2) {
+						// if an operator call is ambiguous, it chooses the one for the larger type
+						Type type0 = valid_funcs[0]->param_types[0];
+						Type type1 = valid_funcs[1]->param_types[0];
+						if (type0 == Type::IntLit || type0.size() < type1.size()) {
+							valid_funcs[0] = valid_funcs[1];
+						}
+						valid_funcs.pop_back();
+					} else {
+						throw Except("Function call is ambiguous", *tok.token);
+					}
 				}
-			}
-			ftok.possible_funcs = valid_funcs;
-			stack.push_back(valid_funcs[0]->return_type);
-		} else {
-			stack.push_back(tok.type);
+
+				Function& func = *valid_funcs[0];
+				for (size_t i = 0; i < ftok.num_unnamed_args; i++) {
+					insert_cast(token, insertions, toks[i], args[i], func.param_types[i]);
+				}
+				for (int i = ftok.num_unnamed_args; i < ftok.num_args; i++) {
+					std::string arg_name = ftok.named_args[i - ftok.num_unnamed_args];
+					Type type = func.named_param_types[func.named_param_map[arg_name]];
+					insert_cast(token, insertions, toks[i], args[i], type);
+				}
+
+				ftok.possible_funcs = valid_funcs;
+				if (ftok.external) mod.external_items.insert(&func);
+				stack.push_back(func.return_type);
+			} break;
+			case Tok::IF: assert(false);
 		}
 		tok_stack.push_back(&tok);
 	}
-
-	if (!insertions.empty()) {
-		Expr new_expr;
-		for (auto& tok : *expr) {
-			auto iter = insertions.find(&*tok);
-			new_expr.emplace_back();
-			new_expr.back().swap(tok);
-			if (iter != insertions.end()) {
-				new_expr.push_back(std::unique_ptr<Tok>(iter->second));
-			}
-		}
-		*expr = std::move(new_expr);
-	}
+	insert(expr, insertions);
 
 	if (res == Type::Invalid || res == stack.back()) return stack.back();
 	Function* cast = std.get_cast(stack.back(), res);
 	if (cast == nullptr) {
-		throw Exception(stack.back().to_string() + " does not match " + res.to_string(), token);
+		throw Except(stack.back().to_string() + " does not match " + res.to_string(), token);
 	}
 	FuncTok* ftok = new FuncTok(token, 1);
 	ftok->possible_funcs.push_back(cast);
 	expr->push_back(std::unique_ptr<Tok>(ftok));
 	return res;
+}
+
+void TypeChecker::insert_cast(const Token& token, std::map<Tok*, Tok*>& insertions, Tok* tok,
+                              Type arg, Type param) {
+	if (param != arg) {
+		FuncTok* new_ftok = new FuncTok(token, 1);
+		Function* cast = std.get_cast(arg, param);
+		if (cast == nullptr) {
+			throw Except("Cannot cast from " + arg.to_string() + " to " + param.to_string(), token);
+		}
+		new_ftok->possible_funcs.push_back(cast);
+		insertions[tok] = new_ftok;
+	}
 }

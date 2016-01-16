@@ -2,16 +2,16 @@
 #define EBC_TYPES_H
 
 #include "Util.h"
+#include "ast/Token.h"
 #include <string>
 #include <set>
 #include <memory>
 
-class BaseType;
-
+class Struct;
 class Type {
 public:
 	enum Form {
-		Invalid,
+		Invalid, Unresolved,
 		Void,                // for empty returns
 		Bool,                // either true or false
 		STRUCT, ENUM, TUPLE, // not exist yet
@@ -24,12 +24,17 @@ public:
 		Float                // long double
 	};
 	Type(Form form);
-	static Type parse(const std::string& str);
+	Type(Token::Suffix suffix);
+	Type(const Token& token);
+	Type(Struct& strukt);
+	static Type parse(const Token& token);
 
+	int size() const;
 	bool is_number() const;
 	bool is_int() const;
 	bool is_signed() const;
 	bool is_float() const;
+	bool is_struct() const;
 
 	std::string to_string() const;
 
@@ -43,8 +48,11 @@ public:
 
 	size_t hash() const;
 
-private:
 	Form form;
+	union {
+		Struct* strukt;
+		const Token* token = nullptr;
+	};
 };
 
 namespace std  {

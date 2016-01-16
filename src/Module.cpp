@@ -34,6 +34,7 @@ const std::vector<Function*>& Module::get_pub_functions() const {
 
 bool Module::declare(Global& global) {
 	if (globals.count(global.token.str())) return true;
+	if (global.pub) pub_globals.push_back(&global);
 	globals[global.token.str()] = &global;
 	return false;
 }
@@ -44,6 +45,29 @@ Global* Module::get_global(const std::string& name) {
 }
 const std::vector<Global*>& Module::get_pub_globals() const {
 	return pub_globals;
+}
+
+bool Module::declare(Struct& strukt) {
+	if (structs.count(strukt.token.str())) return true;
+	if (strukt.pub) pub_structs.push_back(&strukt);
+	structs[strukt.token.str()] = &strukt;
+	return false;
+}
+Struct* Module::get_struct(const std::string& name) {
+	auto iter = structs.find(name);
+	if (iter == structs.end()) return nullptr;
+	return iter->second;
+}
+const std::vector<Struct*>& Module::get_pub_structs() const {
+	return pub_structs;
+}
+
+Module* Module::create_submodule(const std::string& name) {
+	submodules.push_back(std::unique_ptr<Module>(new Module()));
+	std::vector<std::string> vec(1, name);
+	bool success = imports.add(vec, *submodules.back());
+	if (!success) return nullptr;
+	return &*submodules.back();
 }
 
 void Module::push_back(std::unique_ptr<Item> item) {

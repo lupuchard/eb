@@ -1,5 +1,5 @@
 
-fn maths(a: I32, b: I32): Bool {
+fn maths(a: I32, [b: I32]): Bool {
 	x := 2 * (3 + a % 4);
 	x += 2;
 	y := (0x20 & 0d10 | 0o30 ^ 0b101 << 2) - x;
@@ -28,7 +28,7 @@ fn ifs(): Bool {
 }
 
 fn main(): I32 {
-	if maths(6, 12) && ifs() {
+	if maths(6, b=12) && ifs() {
 		0;
 	} else {
 		1;
@@ -36,10 +36,14 @@ fn main(): I32 {
 }
 
 // IMPROVEMENTS
-//   anywhere blocks
+//   assert extension is imported
+//   anywhere blocks/even more functional
 //   conditional compilation
-//   submodules
 //   recompile deps if interface changes
+//   update object filing
+//   methods
+//   access on function call
+//   pseudoconst evaluation
 // NEXT
 //   external c
-//   structs
+//   references

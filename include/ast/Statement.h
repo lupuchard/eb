@@ -18,6 +18,11 @@ struct Statement {
 	}
 };
 
+struct Assignment: public Statement {
+	Assignment(const Token& token): Statement(token, ASSIGNMENT) { }
+	std::vector<std::unique_ptr<AccessTok>> accesses;
+};
+
 struct Declaration: public Statement {
 	Declaration(const Token& token):
 			Statement(token, DECLARATION) { }

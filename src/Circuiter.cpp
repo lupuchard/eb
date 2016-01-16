@@ -29,7 +29,7 @@ void Circuiter::shorten(Expr& expr) {
 	for (size_t j = 0; j < expr.size(); j++) {
 		Tok& tok = *expr[j];
 		switch (tok.form) {
-			case Tok::INT: case Tok::FLOAT: case Tok::VAR:
+			case Tok::VALUE: case Tok::VAR:
 				has_side_fx_stack.push_back(false);
 				stack.push_back(std::vector<std::unique_ptr<Tok>*>(1, &expr[j]));
 				range_stack.push_back(std::make_pair(j, j + 1));
@@ -56,7 +56,8 @@ void Circuiter::shorten(Expr& expr) {
 					artificial_nots.push_back(std::unique_ptr<Token>(anot));
 					if (name == "&&") new_if->expr.emplace_back(new FuncTok(*anot, 1));
 					new_if->true_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
-					new_if->true_block[0]->expr.emplace_back(new IntTok(*tok.token, name == "||"));
+					ValueTok* vtok = new ValueTok(*tok.token, Value(name == "||"));
+					new_if->true_block[0]->expr.push_back(std::unique_ptr<Tok>(vtok));
 					auto& else_expr = stack[stack.size() - 1];
 					new_if->else_block.emplace_back(new Statement(*tok.token, Statement::EXPR));
 					for (size_t i = 0; i < else_expr.size(); i++) {
@@ -67,10 +68,11 @@ void Circuiter::shorten(Expr& expr) {
 					new_if_token = tok.token;
 					goto end_loop;
 				}
-				merge(has_side_fx_stack, stack, range_stack, ftok.num_params,
+				merge(has_side_fx_stack, stack, range_stack, ftok.num_args,
 				      /* hack to test if not operator */ ftok.token->form != Token::SYMBOL, j);
 				stack.back().push_back(&expr[j]);
 			} break;
+			default: assert(false);
 		}
 	}
 	end_loop:

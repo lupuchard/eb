@@ -1,5 +1,5 @@
 #include "passes/LoopChecker.h"
-#include "Exception.h"
+#include "Except.h"
 
 void LoopChecker::check(Module& module, State& state) {
 	for (size_t i = 0; i < module.size(); i++) {
@@ -27,11 +27,11 @@ void LoopChecker::check(Block& block, State& state) {
 			} break;
 			case Statement::CONTINUE:
 				if (state.get_loop(1) == nullptr) {
-					throw Exception("No loop to continue", statement.token);
+					throw Except("No loop to continue", statement.token);
 				} break;
 			case Statement::BREAK:
 				if (state.get_loop(((Break&)statement).amount) == nullptr) {
-					throw Exception("No loop to break out of", statement.token);
+					throw Except("No loop to break out of", statement.token);
 				} break;
 			default: break;
 		}

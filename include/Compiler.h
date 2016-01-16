@@ -29,7 +29,10 @@ private:
 	void compile(File& file);
 	void resolve(Module& module, State& state);
 	void resolve(Module& module, const Block& block, State& state);
-	void resolve(Module& module, const Expr& expr,   State& state);
+	void resolve(Module& module, Expr* expr,   State& state);
+	void resolve(Module& module, Type& type);
+	std::vector<AccessTok*> resolve(Module& module, State& state, const Token& token,
+	                                Tok* tok = nullptr);
 	Module& import(Module& module, const std::vector<std::string>& name, const Token& token);
 	void create_obj_file(File& file);
 	void load_obj_file(File& file);

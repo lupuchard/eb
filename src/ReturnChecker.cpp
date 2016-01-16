@@ -1,5 +1,5 @@
 #include "passes/ReturnChecker.h"
-#include "Exception.h"
+#include "Except.h"
 
 void ReturnChecker::check(Module& module) {
 	for (size_t i = 0; i < module.size(); i++) {
@@ -29,14 +29,14 @@ bool ReturnChecker::check(Block& block) {
 				if_statement.else_returns = check(if_statement.else_block);
 				if (if_statement.true_returns && if_statement.else_returns) {
 					if (i != block.size() - 1) {
-						throw Exception("Unreachable code after if", statement.token);
+						throw Except("Unreachable code after if", statement.token);
 					}
 					return true;
 				}
 			} break;
 			case Statement::RETURN:
 				if (i < block.size() - 1) {
-					throw Exception("Unreachable code", block[i + 1]->token);
+					throw Except("Unreachable code", block[i + 1]->token);
 				}
 				return true;
 			default: break;
@@ -59,7 +59,7 @@ void ReturnChecker::create_implicit_returns(Block& block) {
 			if (!if_statement.true_returns) create_implicit_returns(if_statement.true_block);
 			if (!if_statement.else_returns) create_implicit_returns(if_statement.else_block);
 		} break;
-		default: throw Exception("Expected return", statement.token);
+		default: throw Except("Expected return", statement.token);
 	}
 }
 
@@ -108,13 +108,13 @@ void ReturnChecker::create_drops(Expr& expr, std::vector<Statement*>& new_statem
 }
 
 void ReturnChecker::create_drop(Block& block, const Token& token, Token& tmp) {
-	if (block.empty()) throw Exception("Expected drop from block", token);
+	if (block.empty()) throw Except("Expected drop from block", token);
 	Statement& statement = *block.back();
 	switch (statement.form) {
 		case Statement::EXPR: {
-			std::unique_ptr<Statement> ass(new Statement(tmp, Statement::ASSIGNMENT));
-			ass->expr.swap(statement.expr);
-			block.back().swap(ass);
+			std::unique_ptr<Statement> assign(new Assignment(tmp));
+			assign->expr.swap(statement.expr);
+			block.back().swap(assign);
 		} break;
 		case Statement::IF: {
 			If& if_statement = (If&)statement;

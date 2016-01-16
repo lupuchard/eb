@@ -28,4 +28,5 @@ TEST_CASE("full tests", "[full]") {
 	test("fib.eb", 0);
 	test("short.eb", 0);
 	test("import.eb", 8);
+	test("struct.eb", 0);
 }

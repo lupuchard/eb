@@ -4,9 +4,9 @@
 #include "ast/Token.h"
 #include <stdexcept>
 
-struct Exception: std::invalid_argument {
-	Exception(std::string desc, const Token& token);
-	Exception(std::string desc);
+struct Except : std::invalid_argument {
+	Except(std::string desc, const Token& token);
+	Except(std::string desc);
 	virtual const char* what() const throw();
 	std::string desc;
 	Token token;

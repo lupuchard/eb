@@ -41,6 +41,7 @@ private:
 	Node root;
 
 public:
+	// returns true on success
 	bool add(const std::vector<std::string>& module_name, T& module) {
 		std::vector<const std::string*> vec;
 		for (auto& str : module_name) vec.push_back(&str);

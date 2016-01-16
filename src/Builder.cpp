@@ -12,19 +12,39 @@ void Builder::build(Module& module, State& state, const std::string& out_file) {
 	llvm::Module llvm_module("thang_main", llvm::getGlobalContext());
 	c = &llvm_module.getContext();
 
-	for (auto func : module.external_functions) {
-		llvm::Type* result = type_to_llvm(func->return_type);
-		std::vector<llvm::Type*> args;
-		for (size_t i = 0; i < func->param_names.size(); i++) {
-			args.push_back(type_to_llvm(func->param_types[i]));
+	// declare external items
+	for (auto item : module.external_items) {
+		switch (item->form) {
+			case Item::IMPORT: break;
+			case Item::FUNCTION: {
+				Function& func = *(Function*)item;
+				llvm::Type* result = type_to_llvm(func.return_type);
+				std::vector<llvm::Type*> args;
+				for (size_t i = 0; i < func.param_names.size(); i++) {
+					args.push_back(type_to_llvm(func.param_types[i]));
+				}
+				for (size_t i = 0; i < func.named_param_types.size(); i++) {
+					args.push_back(type_to_llvm(func.named_param_types[i]));
+				}
+				auto llvm_args = llvm::ArrayRef<llvm::Type*>(args);
+				llvm::FunctionType* llvm_func = llvm::FunctionType::get(result, llvm_args, false);
+				llvm_functions[&func] = llvm_module.getOrInsertFunction(func.unique_name, llvm_func);
+			} break;
+			case Item::GLOBAL: {
+				Global& global = *(Global*)item;
+				llvm::Type* llvm_type = type_to_llvm(global.var.type);
+				global.var.llvm = llvm_module.getOrInsertGlobal(global.unique_name, llvm_type);
+			} break;
+			case Item::STRUCT: {
+				Struct& strukt = *(Struct*)item;
+				std::vector<llvm::Type*> members;
+				for (size_t i = 0; i < strukt.member_types.size(); i++) {
+					members.push_back(type_to_llvm(strukt.member_types[i]));
+				}
+				auto llvm_args = llvm::ArrayRef<llvm::Type*>(members);
+				llvm_structs[&strukt] = llvm::StructType::create(llvm_args, strukt.unique_name);
+			} break;
 		}
-		auto llvm_args = llvm::ArrayRef<llvm::Type*>(args);
-		llvm::FunctionType* llvm_func = llvm::FunctionType::get(result, llvm_args, false);
-		llvm_functions[func] = llvm_module.getOrInsertFunction(func->unique_name, llvm_func);
-	}
-	for (auto global : module.external_globals) {
-		llvm::Type* llvm_type = type_to_llvm(global->var.type);
-		global->var.llvm = llvm_module.getOrInsertGlobal(global->unique_name, llvm_type);
 	}
 
 	do_module(module, llvm_module, state);
@@ -45,7 +65,10 @@ void Builder::build(Module& module, State& state, const std::string& out_file) {
 }
 
 llvm::Type* Builder::type_to_llvm(Type& type) {
-	if (type == Type::Float) {
+	if (type == Type::STRUCT) {
+		assert(llvm_structs.count(type.strukt));
+		return llvm_structs[type.strukt];
+	} else if (type == Type::Float) {
 		switch (sizeof(long double)) {
 			case 8:  return llvm::Type::getDoubleTy(*c);
 			case 10: return llvm::Type::getX86_FP80Ty(*c);
@@ -53,51 +76,61 @@ llvm::Type* Builder::type_to_llvm(Type& type) {
 			default: assert(false); break;
 		}
 	}
-	static std::unordered_map<Type, llvm::Type*> types = {
-			{Type::Void, llvm::Type::getVoidTy(*c)}, {Type::Bool, llvm::Type::getInt1Ty(*c)},
-			{Type::IntLit, llvm::IntegerType::get(*c, 8 * sizeof(uintmax_t))},
-			{Type::Int,    llvm::IntegerType::get(*c, 8 * sizeof(int_fast32_t))},
-			{Type::IPtr,   llvm::IntegerType::get(*c, 8 * sizeof(intptr_t))},
-			{Type::UPtr,   llvm::IntegerType::get(*c, 8 * sizeof(uintptr_t))},
-			{Type::I8,  llvm::Type::getInt8Ty(*c)},  {Type::U8,  llvm::Type::getInt8Ty(*c)},
-			{Type::I16, llvm::Type::getInt16Ty(*c)}, {Type::U16, llvm::Type::getInt16Ty(*c)},
-			{Type::I32, llvm::Type::getInt32Ty(*c)}, {Type::U32, llvm::Type::getInt32Ty(*c)},
-			{Type::I64, llvm::Type::getInt64Ty(*c)}, {Type::U64, llvm::Type::getInt64Ty(*c)},
-			{Type::F32, llvm::Type::getFloatTy(*c)}, {Type::F64, llvm::Type::getDoubleTy(*c)}
-	};
-	auto iter = types.find(type);
-	assert(iter != types.end());
-	return iter->second;
+	else if (type == Type::F32)  return llvm::Type::getFloatTy(*c);
+	else if (type == Type::F64)  return llvm::Type::getDoubleTy(*c);
+	else if (type == Type::Void) return llvm::Type::getVoidTy(*c);
+	else if (type == Type::Bool) return llvm::Type::getInt1Ty(*c);
+	else {
+		assert(type.is_int());
+		return llvm::IntegerType::get(*c, (unsigned)8 * type.size());
+	}
+}
+
+llvm::Constant* Builder::value_to_llvm(Value& value) {
+	if (value.type.is_float()) {
+		return llvm::ConstantFP::get(type_to_llvm(value.type), value.f());
+	} else if (value.type.is_int()) {
+		return llvm::ConstantInt::get(type_to_llvm(value.type), value.i());
+	} else if (value.type == Type::Bool) {
+		return llvm::ConstantInt::get(type_to_llvm(value.type), (unsigned)value.b());
+	}
+	assert(false);
+	return nullptr;
 }
 
 void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state) {
+	// step 1: declare types
+	for (size_t i = 0; i < module.size(); i++) {
+		Item& item = module[i];
+		switch (item.form) {
+			case Item::STRUCT: {
+				Struct& strukt = (Struct&)item;
+				llvm_structs[&strukt] = llvm::StructType::create(*c, strukt.unique_name);
+			} break;
+			default: break;
+		}
+	}
+
+	// step 2: fill types & declare functions & globals
 	for (size_t i = 0; i < module.size(); i++) {
 		Item& item = module[i];
 		switch (item.form) {
 			case Item::FUNCTION: {
 				Function& func = (Function&)item;
-
+				if (func.form != Function::USER) continue;
 				llvm::Type* ret = type_to_llvm(func.return_type);
 				std::vector<llvm::Type*> params;
 				for (size_t j = 0; j < func.param_types.size(); j++) {
 					params.push_back(type_to_llvm(func.param_types[j]));
 				}
-				llvm_func = llvm::cast<llvm::Function>(llvm_module.getOrInsertFunction(
+				for (size_t j = 0; j < func.named_param_types.size(); j++) {
+					params.push_back(type_to_llvm(func.named_param_types[j]));
+				}
+				auto llvm_func = llvm_module.getOrInsertFunction(
 						func.token.str() == "main" ? "eb$main" : func.unique_name,
 						llvm::FunctionType::get(ret, llvm::ArrayRef<llvm::Type*>(params), false)
-				));
+				);
 				llvm_functions[&func] = llvm_func;
-
-				state.descend(func.block);
-				auto iter = llvm_func->arg_begin();
-				for (size_t j = 0; j < func.param_types.size(); j++) {
-					state.get_var(func.param_names[j]->str())->llvm = &*iter++;
-				}
-				llvm::IRBuilder<> builder(create_basic_block("entry"));
-
-				do_block(builder, func.block, state);
-
-				state.ascend();
 			} break;
 			case Item::GLOBAL: {
 				Global& global = (Global&)item;
@@ -105,10 +138,43 @@ void Builder::do_module(Module& module, llvm::Module& llvm_module, State& state)
 				llvm::GlobalVariable* llvm_global = llvm::cast<llvm::GlobalVariable>(
 						llvm_module.getOrInsertGlobal(global.unique_name, type)
 				);
-				llvm_global->setInitializer(default_value(global.var.type, type));
+				llvm_global->setInitializer(value_to_llvm(global.val));
 				global.var.llvm = llvm_global;
 			} break;
-			case Item::IMPORT: break;
+			case Item::STRUCT: {
+				Struct& strukt = (Struct&)item;
+				auto llvm_struct = llvm_structs[&strukt];
+				std::vector<llvm::Type*> members;
+				for (size_t j = 0; j < strukt.member_types.size(); j++) {
+					members.push_back(type_to_llvm(strukt.member_types[j]));
+				}
+				llvm_struct->setBody(llvm::ArrayRef<llvm::Type*>(members));
+			} break;
+			default: break;
+		}
+	}
+
+	// step 3: do function body
+	for (size_t i = 0; i < module.size(); i++) {
+		Item& item = module[i];
+		switch (item.form) {
+			case Item::FUNCTION: {
+				Function& func = (Function&)item;
+				if (func.form != Function::USER) continue;
+				llvm_func = llvm::cast<llvm::Function>(llvm_functions[&func]);
+				state.descend(func.block);
+				auto iter = llvm_func->arg_begin();
+				for (size_t j = 0; j < func.param_types.size(); j++) {
+					state.get_var(func.param_names[j]->str())->llvm = &*iter++;
+				}
+				for (size_t j = 0; j < func.named_param_types.size(); j++) {
+					state.get_var(func.named_param_names[j]->str())->llvm = &*iter++;
+				}
+				llvm::IRBuilder<> builder(create_basic_block("entry"));
+				do_block(builder, func.block, state);
+				state.ascend();
+			} break;
+			default: break;
 		}
 	}
 }
@@ -148,8 +214,20 @@ llvm::Value* Builder::do_statement(llvm::IRBuilder<>& b, Statement& statement, S
 			}
 		} break;
 		case Statement::ASSIGNMENT: {
-			llvm::Value* assigned = do_expr(b, statement.expr, state);
-			b.CreateStore(assigned, state.get_var(statement.token.str())->llvm);
+			Assignment& assign = (Assignment&)statement;
+			llvm::Value* assigned = do_expr(b, assign.expr, state);
+			llvm::Value* dest = state.get_var(assign.token.str())->llvm;
+			if (assign.accesses.empty()) {
+				b.CreateStore(assigned, dest);
+			} else {
+				std::vector<unsigned> idxs;
+				for (auto& access : assign.accesses) {
+					idxs.push_back((unsigned)access->idx);
+				}
+				llvm::Value* strukt = b.CreateLoad(dest, assign.token.str());
+				strukt = b.CreateInsertValue(strukt, assigned, llvm::ArrayRef<unsigned>(idxs));
+				b.CreateStore(strukt, dest);
+			}
 		} break;
 		case Statement::EXPR: {
 			drop = do_expr(b, statement.expr, state);
@@ -219,20 +297,10 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 	for (size_t j = 0; j < expr.size(); j++) {
 		Tok& tok = *expr[j];
 		switch (tok.form) {
-			case Tok::INT: {
-				auto i = ((IntTok&)tok).i;
-				if (tok.type.is_float()) {
-					value_stack.push_back(llvm::ConstantFP::get( type_to_llvm(tok.type), i));
-				} else {
-					value_stack.push_back(llvm::ConstantInt::get(type_to_llvm(tok.type), i));
-				}
-				type_stack.push_back(&tok.type);
-			} break;
-			case Tok::FLOAT: {
-				double f = ((FloatTok&)tok).f;
-				value_stack.push_back(llvm::ConstantFP::get(type_to_llvm(tok.type), f));
-				type_stack.push_back(&tok.type);
-			} break;
+			case Tok::VALUE:
+				value_stack.push_back(value_to_llvm(((ValueTok&)tok).value));
+				type_stack.push_back(&((ValueTok&)tok).value.type);
+				break;
 			case Tok::VAR: {
 				Variable& var = *state.get_var(tok.token->str());
 				if (var.is_param) {
@@ -242,21 +310,41 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 				}
 				type_stack.push_back(&var.type);
 			} break;
+			case Tok::ACCESS: {
+				assert(type_stack.back()->is_struct());
+				int idx = ((AccessTok&)tok).idx;
+				auto arr = llvm::ArrayRef<unsigned>((unsigned)idx);
+				auto value = value_stack.back();
+				value_stack.pop_back();
+				value_stack.push_back(builder.CreateExtractValue(value, arr));
+				type_stack[type_stack.size() - 1] = &type_stack.back()->strukt->member_types[idx];
+			} break;
 			case Tok::FUNC: {
 				FuncTok& ftok = (FuncTok&)tok;
 				assert(ftok.possible_funcs.size() == 1);
 				Function& func = *ftok.possible_funcs[0];
 				std::vector<llvm::Value*> args;
-				args.resize(func.param_types.size());
-				for (int i = (int)func.param_types.size() - 1; i >= 0; i--) {
-					args[i] = value_stack.back();
-					value_stack.pop_back();
-					type_stack.pop_back();
+				for (int i = 0; i < func.param_names.size(); i++) {
+					args.push_back(value_stack[value_stack.size() - ftok.num_args + i]);
 				}
+				for (size_t i = 0; i < func.named_param_types.size(); i++) {
+					Value& val = func.named_param_vals[i];
+					args.push_back(val.type == Type::Invalid ? nullptr : value_to_llvm(val));
+				}
+				for (size_t i = 0; i < ftok.named_args.size(); i++) {
+					int func_index = func.named_param_map[ftok.named_args[i]];
+					size_t stack_off = value_stack.size() - ftok.num_args + ftok.num_unnamed_args;
+					args[func.param_names.size() + func_index] = value_stack[stack_off + i];
+				}
+				value_stack.erase(value_stack.end() - ftok.num_args, value_stack.end());
+				type_stack.erase(  type_stack.end() - ftok.num_args,  type_stack.end());
 				if (func.form == Function::OP) {
 					value_stack.push_back(do_op(builder, func, args));
 				} else if (func.form == Function::CAST) {
 					value_stack.push_back(do_cast(builder, func, args[0]));
+				} else if (func.form == Function::CONSTRUCTOR) {
+					Struct* strukt = state.get_module().get_struct(func.token.str());
+					value_stack.push_back(do_constructor(builder, *strukt, args));
 				} else {
 					assert(llvm_functions.count(ftok.possible_funcs[0]));
 					value_stack.push_back(builder.CreateCall(
@@ -268,6 +356,7 @@ llvm::Value* Builder::do_expr(llvm::IRBuilder<>& builder, Expr& expr, State& sta
 			} break;
 			default: assert(false);
 		}
+		assert(value_stack.back() != nullptr);
 	}
 	return value_stack.back();
 }
@@ -355,6 +444,15 @@ llvm::Value* Builder::do_cast(llvm::IRBuilder<>& builder, Function& cast, llvm::
 	} else {
 		return builder.CreateZExtOrTrunc(arg, type_to_llvm(cast.return_type));
 	}
+}
+
+llvm::Value* Builder::do_constructor(llvm::IRBuilder<>& builder, Struct& strukt,
+                                     std::vector<llvm::Value*>& args) {
+	llvm::Value* llvm_struct = llvm::UndefValue::get(llvm_structs[&strukt]);
+	for (unsigned i = 0; i < args.size(); i++) {
+		llvm_struct = builder.CreateInsertValue(llvm_struct, args[i], llvm::ArrayRef<unsigned>(i));
+	}
+	return llvm_struct;
 }
 
 llvm::BasicBlock* Builder::create_basic_block(std::string name) {

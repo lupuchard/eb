@@ -75,29 +75,29 @@ TEST_CASE("expression", "[constructor]") {
 
 	Expr& expr1 = block[0]->expr;
 	REQUIRE(expr1.size() == 10);
-	REQUIRE(((IntTok&)*expr1[0]).i  == 5);
-	REQUIRE(((IntTok&)*expr1[1]).i  == 4);
-	REQUIRE(((IntTok&)*expr1[2]).i  == 3);
+	REQUIRE(((ValueTok&)*expr1[0]).value.i() == 5);
+	REQUIRE(((ValueTok&)*expr1[1]).value.i() == 4);
+	REQUIRE(((ValueTok&)*expr1[2]).value.i() == 3);
 	REQUIRE(expr1[3]->token->str() == "-");
-	REQUIRE(((IntTok&)*expr1[4]).i  == 2);
+	REQUIRE(((ValueTok&)*expr1[4]).value.i() == 2);
 	REQUIRE(expr1[5]->token->str() == "+");
 	REQUIRE(expr1[6]->token->str() == "*");
-	REQUIRE(((IntTok&)*expr1[7]).i  == 1);
+	REQUIRE(((ValueTok&)*expr1[7]).value.i() == 1);
 	REQUIRE(expr1[8]->token->str() == "/");
 	REQUIRE(expr1[9]->token->str() == "-");
 
 	Expr& expr2 = block[1]->expr;
 	REQUIRE(expr2.size() == 5);
-	REQUIRE(((IntTok&)*expr2[0]).i  == 1);
-	REQUIRE(((IntTok&)*expr2[1]).i  == 3);
-	REQUIRE(((IntTok&)*expr2[2]).i  == 4);
+	REQUIRE(((ValueTok&)*expr2[0]).value.b());
+	REQUIRE(((ValueTok&)*expr2[1]).value.i() == 3);
+	REQUIRE(((ValueTok&)*expr2[2]).value.i() == 4);
 	REQUIRE(expr2[3]->token->str() == "<=");
 	REQUIRE(expr2[4]->token->str() == "&&");
 }
 
 TEST_CASE("function call", "[constructor]") {
 	std::cout << "Construct function calls..." << std::endl;
-	Tokenizer tokenizer("fn dob() { x = foo(1, 2 + 3,); x = bar(); x = baz(a, b, c); }");
+	Tokenizer tokenizer("fn dob() { x = foo(1, 2 + 3,); x = bar(); x = baz(a, b, c=3); }");
 	auto& tokens = tokenizer.get_tokens();
 	Parser constructor;
 	Module mod;
@@ -106,13 +106,19 @@ TEST_CASE("function call", "[constructor]") {
 
 	Expr& expr1 = block[0]->expr;
 	REQUIRE(expr1[4]->token->str() == "foo");
-	REQUIRE(dynamic_cast<FuncTok&>(*expr1[4]).num_params == 2);
+	REQUIRE(dynamic_cast<FuncTok&>(*expr1[4]).num_args == 2);
 
 	Expr& expr2 = block[1]->expr;
-	REQUIRE(dynamic_cast<FuncTok&>(*expr2[0]).num_params == 0);
+	REQUIRE(dynamic_cast<FuncTok&>(*expr2[0]).num_args == 0);
 
 	Expr& expr3 = block[2]->expr;
-	REQUIRE(dynamic_cast<FuncTok&>(*expr3[3]).num_params == 3);
+	ValueTok& vtok = dynamic_cast<ValueTok&>(*expr3[2]);
+	REQUIRE(vtok.value.i() == 3);
+	FuncTok& ftok = (FuncTok&)*expr3[3];
+	REQUIRE(ftok.num_args == 3);
+	REQUIRE(ftok.num_unnamed_args == 2);
+	REQUIRE(ftok.named_args.size() == 1);
+	REQUIRE(ftok.named_args[0] == "c");
 }
 
 TEST_CASE("if", "[constructor]") {

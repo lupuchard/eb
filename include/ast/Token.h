@@ -1,17 +1,19 @@
-#include "Type.h"
 #include <string>
 #include <sstream>
 #include <cstdint>
 #include <cassert>
+#include <vector>
 
 #ifndef EBC_TOKEN_H
 #define EBC_TOKEN_H
 
-struct Token {
+class Token {
+public:
 	enum Form {
 		NONE, INVALID, END, FLOAT, INT, KW_TRUE, KW_FALSE, IDENT, SYMBOL,
 		KW_PUB, KW_FN, KW_RETURN, KW_IF, KW_ELSE, KW_WHILE, KW_BREAK, KW_CONTINUE,
 	};
+	enum Suffix { N, I, I8, I16, I32, I64, IPtr, U8, U16, U32, U64, UPtr, F32, F64, F };
 
 	Token() { }
 	Token(Form form, std::string str, int line = -1, int column = 0):
@@ -21,7 +23,7 @@ struct Token {
 
 	int line, column;
 	Form form = NONE;
-	Type type = Type::Invalid;
+	Suffix suffix = N;
 
 	inline const std::string& str() const {
 		assert(!str_list.empty());

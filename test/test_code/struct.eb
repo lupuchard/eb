@@ -1,0 +1,21 @@
+
+struct Cat { age: Float, hp: Int, ugly: Bool }
+
+fn main(): I32 {
+	cat := Cat(hp = 10, age = 4, ugly = false)
+	if cat.hp != 10 { return 1 }
+	cat.hp = 7
+	if cat.hp != 7  { return 2 }
+	cat.hp += 4
+	if cat.hp != 11 { return 3 }
+
+	fat_cat := cat
+	fat_cat.hp = 100
+	fat_cat.ugly = true
+	if !fat_cat.ugly { return 4 }
+
+	// jk fat cats are still cute
+	fat_cat.ugly = false
+
+	return 0
+}
