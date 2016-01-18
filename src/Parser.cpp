@@ -105,9 +105,10 @@ std::unique_ptr<Function> Parser::do_function() {
 				function->add_named_param(*param_token, type);
 				param_token = &next();
 				if (param_token->str() == "=") {
-					Expr expr = do_expr(",");
+					Expr expr = do_expr(",]", false);
 					function->named_param_vals.back() = eval.eval(type, expr);
-					param_token = &peek();
+					index--;
+					param_token = &next();
 				}
 				if (param_token->str() == ",") param_token = &next();
 				else if (param_token->str() != "]") throw Except("Expected ']'", *param_token);
@@ -137,24 +138,28 @@ std::unique_ptr<Global> Parser::do_global(bool conzt) {
 	expect(":");
 	Type type = Type::parse(expect_ident());
 	expect("=");
-	Expr expr = do_expr();
+	Expr expr = do_expr("}", true);
 	return std::unique_ptr<Global>(new Global(name, type, eval.eval(type, expr), conzt));
 }
 
 std::unique_ptr<Struct> Parser::do_struct(bool pub, Module& module) {
 	const Token& name_token = expect_ident();
 	expect("{");
+	trim();
 	std::unique_ptr<Struct> strukt(new Struct(name_token));
 
 	const Token* member_token = &next();
 	while (member_token->str() != "}") {
 		assert_simple_ident(*member_token);
 		expect(":");
+		trim();
 		strukt->add_member(*member_token, Type::parse(expect_ident()));
+		trim();
 		member_token = &next();
 		trim();
-		if (member_token->str() == ",") member_token = &next();
-		else if (member_token->str() != "}") throw Except("Expected ',' or '}'", *member_token);
+		if (member_token->str() == ",") {
+			member_token = &next();
+		} else if (member_token->str() != "}") throw Except("Expected ',' or '}'", *member_token);
 	}
 
 	Module* submodule = module.create_submodule(name_token.str());
@@ -248,7 +253,7 @@ std::unique_ptr<Statement> Parser::do_statement() {
 		case Token::KW_IF: {
 			index--;
 			std::unique_ptr<Statement> statement(new Statement(token, Statement::EXPR));
-			do_expr(statement->expr);
+			do_expr(statement->expr, "}", true);
 			if (statement->expr.size() == 1) {
 				std::unique_ptr<If> if_statement;
 				if_statement.swap(((IfTok&)*statement->expr[0]).if_statement);
@@ -283,7 +288,7 @@ std::unique_ptr<Declaration> Parser::do_declare(const Token& ident) {
 	} else {
 		throw Except("Expected '=' or identifier.", token);
 	}
-	do_expr(declaration->expr);
+	do_expr(declaration->expr, "}", true);
 	return declaration;
 }
 
@@ -293,10 +298,10 @@ std::unique_ptr<Assignment> Parser::do_assign(const Token& ident, const Token* o
 		// If it is an operator assignment (like +=) then the expression has the variable
 		// appended to the front and the operator appended to the back.
 		assignment->expr.emplace_back(new VarTok(ident));
-		do_expr(assignment->expr);
+		do_expr(assignment->expr, "}", true);
 		assignment->expr.emplace_back(new FuncTok(*op_token, 2));
 	} else {
-		do_expr(assignment->expr);
+		do_expr(assignment->expr, "}", true);
 	}
 	return assignment;
 }
@@ -304,19 +309,19 @@ std::unique_ptr<Assignment> Parser::do_assign(const Token& ident, const Token* o
 std::unique_ptr<Statement> Parser::do_expr(const Token& kw) {
 	std::unique_ptr<Statement> expression(new Statement(kw, Statement::EXPR));
 	index--;
-	do_expr(expression->expr);
+	do_expr(expression->expr, "}", true);
 	return expression;
 }
 
 std::unique_ptr<Statement> Parser::do_return(const Token& kw) {
 	std::unique_ptr<Statement> return_statement(new Statement(kw, Statement::RETURN));
-	do_expr(return_statement->expr);
+	do_expr(return_statement->expr, "}", true);
 	return return_statement;
 }
 
 std::unique_ptr<If> Parser::do_if(const Token& kw) {
 	std::unique_ptr<If> if_statement(new If(kw));
-	do_expr(if_statement->expr, "{");
+	do_expr(if_statement->expr, "{", false);
 	if_statement->true_block = do_block();
 	if (peek().form == Token::KW_ELSE) {
 		next();
@@ -338,7 +343,7 @@ std::unique_ptr<While> Parser::do_while(const Token& kw) {
 		// of no condition, defaults to infinite loop
 		while_statement->expr.emplace_back(new ValueTok(kw, Value(true)));
 	} else {
-		do_expr(while_statement->expr, "{");
+		do_expr(while_statement->expr, "{", false);
 	}
 	while_statement->block = do_block();
 	return while_statement;
@@ -358,13 +363,13 @@ std::unique_ptr<Break> Parser::do_break(const Token& kw) {
 	return break_statement;
 }
 
-Expr Parser::do_expr(const std::string& terminator) {
+Expr Parser::do_expr(const std::string& term, bool term_on_end) {
 	Expr expr;
-	do_expr(expr, terminator);
+	do_expr(expr, term, term_on_end);
 	return std::move(expr);
 }
 
-void Parser::do_expr(Expr& expr, const std::string& terminator) {
+void Parser::do_expr(Expr& expr, const std::string& term, bool term_on_end) {
 	std::vector<Op*> ops;
 	std::vector<const Token*> tokens;
 	bool prev_was_op  = true;
@@ -380,7 +385,8 @@ void Parser::do_expr(Expr& expr, const std::string& terminator) {
 			next();
 			continue;
 		}
-		if (token.form == Token::END || token.str() == "}" || token.str() == terminator) {
+		if ((token.form == Token::END && term_on_end) ||
+				term.find(token.str()[0]) != std::string::npos) {
 			// the expression has terminated
 			while (!ops.empty()) {
 				if (ops.back() == &PAREN) throw Except("Unclosed parenthesis", token);

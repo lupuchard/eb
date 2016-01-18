@@ -26,8 +26,8 @@ private:
 	std::unique_ptr<If>          do_if(     const Token& kw);
 	std::unique_ptr<While>       do_while(  const Token& kw);
 	std::unique_ptr<Break>       do_break(  const Token& kw);
-	Expr                         do_expr(const std::string& terminator = ";");
-	void                         do_expr(Expr& expr, const std::string& terminator = ";");
+	Expr                         do_expr(const std::string& term, bool term_on_end);
+	void                         do_expr(Expr& expr, const std::string& term, bool term_on_end);
 
 	void trim();
 	void expect(const std::string& str);

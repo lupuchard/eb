@@ -162,6 +162,10 @@ void Compiler::resolve(Module& module, State& state) {
 				for (Type& type : func.param_types) {
 					resolve(module, type);
 				}
+				for (Type& type : func.named_param_types) {
+					resolve(module, type);
+				}
+				resolve(module, func.return_type);
 				state.descend(func.block);
 				state.set_func(func);
 				for (size_t j = 0; j < func.param_names.size(); j++) {
