@@ -1,6 +1,6 @@
 # eb
 
-My unoriginal language. Compiles to llvm and stuff.
+My programming language. Compiles to llvm and stuff.
 
 	// structures!
 	struct Cat {
